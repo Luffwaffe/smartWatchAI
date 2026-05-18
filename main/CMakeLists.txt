@@ -1,0 +1,9 @@
+idf_component_register(
+    SRCS
+        main.c
+        app_init.c
+        ui/ui_manager.c
+    INCLUDE_DIRS
+        .
+        ui
+)
