@@ -35,9 +35,9 @@ static const char *TAG = "app_manager";
 #define APP_MANAGER_OVERLAY_RIGHT_H_PCT 100
 #define APP_MANAGER_OVERLAY_RIGHT_COLOR 0x0B0F14
 #define APP_MANAGER_OVERLAY_RIGHT_OPA APP_MANAGER_OVERLAY_DEBUG_OPA
-#define APP_MANAGER_BOTTOM_NAV_W_PCT 50
+#define APP_MANAGER_BOTTOM_NAV_W_PCT 70
 #define APP_MANAGER_BOTTOM_NAV_H APP_MANAGER_OVERLAY_BOTTOM_H
-#define APP_MANAGER_HOME_PILL_H 5
+#define APP_MANAGER_HOME_PILL_H 3
 #define APP_MANAGER_HOME_LINE_BOTTOM_PAD 14
 #define APP_MANAGER_SWIPE_UP_MIN_DISTANCE 36
 #define APP_MANAGER_SWIPE_DOWN_MIN_DISTANCE 36
@@ -142,7 +142,6 @@ static lv_obj_t *app_manager_create_content_root(lv_obj_t *parent)
     lv_obj_set_size(content, LV_PCT(100), LV_PCT(100));
     lv_obj_align(content, LV_ALIGN_CENTER, 0, 0);
     lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_pad_bottom(content, APP_MANAGER_BOTTOM_NAV_H, 0);
     return content;
 }
 
@@ -209,7 +208,7 @@ static lv_obj_t *app_manager_create_bottom_nav_area(lv_obj_t *parent)
     lv_obj_set_size(pill, LV_PCT(100), APP_MANAGER_HOME_PILL_H);
     lv_obj_align(pill, LV_ALIGN_BOTTOM_MID, 0, -APP_MANAGER_HOME_LINE_BOTTOM_PAD);
     lv_obj_set_style_radius(pill, APP_MANAGER_HOME_PILL_H / 2, 0);
-    lv_obj_set_style_bg_color(pill, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_color(pill, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_bg_opa(pill, LV_OPA_50, 0);
     bottom_nav_bind_events(pill);
 

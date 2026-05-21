@@ -1,6 +1,7 @@
 #include "clock/view/view.h"
 
 #include "bsp/esp-bsp.h"
+#include "clock/assets.h"
 #include "clock/context.h"
 #include "clock/store/store.h"
 
@@ -9,6 +10,11 @@ esp_err_t clock_view_open(lv_obj_t *root)
     clock_context_t *context = clock_context_get();
 
     bsp_display_lock(0);
+    lv_obj_t *bg = lv_img_create(root);
+    lv_img_set_src(bg, &watchface);
+    lv_obj_center(bg);
+    lv_obj_move_background(bg);
+
     context->count_label = lv_label_create(root);
     lv_label_set_text_fmt(context->count_label, "%d", clock_store_get_count());
     lv_obj_set_style_text_font(context->count_label, &lv_font_montserrat_20, 0);

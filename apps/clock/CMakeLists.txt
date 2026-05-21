@@ -6,6 +6,7 @@ idf_component_register(
         "src/controller/controller.c"
         "src/service/service.c"
         "src/store/store.c"
+        "assets/generated/watchface.c"
     INCLUDE_DIRS
         "include"
     REQUIRES
