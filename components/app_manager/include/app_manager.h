@@ -38,6 +38,9 @@ esp_err_t app_manager_register_app(const app_t *app);
 /* Open an app by id (creates screen, calls open(), then start_backend()). */
 esp_err_t app_manager_open_app(const char *app_id);
 
+/* Return from the current app to the launcher. */
+esp_err_t app_manager_back_to_launcher(void);
+
 /* Create/show the launcher grid. hw_status is currently optional/unused. */
 esp_err_t app_manager_show_launcher(const app_hw_status_t *hw_status);
 

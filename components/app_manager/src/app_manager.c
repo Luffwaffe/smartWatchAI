@@ -8,9 +8,46 @@
 #include "esp_log.h"
 #include "bsp/esp-bsp.h"
 #include <string.h>
-#include <stdio.h>
 
 static const char *TAG = "app_manager";
+
+#ifdef DEBUG
+#define APP_MANAGER_DEBUG_LOG(...) ESP_LOGI(TAG, __VA_ARGS__)
+#define APP_MANAGER_OVERLAY_DEBUG_OPA LV_OPA_30
+#else
+#define APP_MANAGER_DEBUG_LOG(...) do { } while (0)
+#define APP_MANAGER_OVERLAY_DEBUG_OPA LV_OPA_TRANSP
+#endif
+
+#define APP_MANAGER_OVERLAY_BOTTOM_W_PCT 50
+#define APP_MANAGER_OVERLAY_BOTTOM_H 25
+#define APP_MANAGER_OVERLAY_BOTTOM_COLOR 0x0B0F14
+#define APP_MANAGER_OVERLAY_BOTTOM_OPA APP_MANAGER_OVERLAY_DEBUG_OPA
+#define APP_MANAGER_OVERLAY_TOP_W_PCT 100
+#define APP_MANAGER_OVERLAY_TOP_H 25
+#define APP_MANAGER_OVERLAY_TOP_COLOR 0x0B0F14
+#define APP_MANAGER_OVERLAY_TOP_OPA APP_MANAGER_OVERLAY_DEBUG_OPA
+#define APP_MANAGER_OVERLAY_LEFT_W 25
+#define APP_MANAGER_OVERLAY_LEFT_H_PCT 100
+#define APP_MANAGER_OVERLAY_LEFT_COLOR 0x0B0F14
+#define APP_MANAGER_OVERLAY_LEFT_OPA APP_MANAGER_OVERLAY_DEBUG_OPA
+#define APP_MANAGER_OVERLAY_RIGHT_W 25
+#define APP_MANAGER_OVERLAY_RIGHT_H_PCT 100
+#define APP_MANAGER_OVERLAY_RIGHT_COLOR 0x0B0F14
+#define APP_MANAGER_OVERLAY_RIGHT_OPA APP_MANAGER_OVERLAY_DEBUG_OPA
+#define APP_MANAGER_BOTTOM_NAV_W_PCT 50
+#define APP_MANAGER_BOTTOM_NAV_H APP_MANAGER_OVERLAY_BOTTOM_H
+#define APP_MANAGER_HOME_PILL_H 5
+#define APP_MANAGER_HOME_LINE_BOTTOM_PAD 14
+#define APP_MANAGER_SWIPE_UP_MIN_DISTANCE 36
+#define APP_MANAGER_SWIPE_DOWN_MIN_DISTANCE 36
+#define APP_MANAGER_SWIPE_SIDE_MIN_DISTANCE 36
+
+typedef enum {
+    APP_MANAGER_STATE_LAUNCHER,
+    APP_MANAGER_STATE_APP,
+    APP_MANAGER_STATE_TRANSITION,
+} app_manager_state_t;
 
 static const app_t *s_registry[16];
 static int s_reg_count = 0;
@@ -18,11 +55,24 @@ static QueueHandle_t s_ui_queue = NULL;
 static lv_obj_t *s_current_root = NULL;
 static const app_t *s_current_app = NULL;
 static lv_obj_t *s_launcher_root = NULL;
+static app_manager_state_t s_state = APP_MANAGER_STATE_LAUNCHER;
+static bool s_opening_app = false;
+static bool s_bottom_nav_pressed = false;
+static lv_point_t s_bottom_nav_press_start = {0};
+static bool s_top_overlay_pressed = false;
+static lv_point_t s_top_overlay_press_start = {0};
+static bool s_left_overlay_pressed = false;
+static lv_point_t s_left_overlay_press_start = {0};
+static bool s_right_overlay_pressed = false;
+static lv_point_t s_right_overlay_press_start = {0};
 
 static void launcher_icon_cb(lv_event_t *e)
 {
     const app_t *app = (const app_t *)lv_event_get_user_data(e);
-    if (app) {
+    APP_MANAGER_DEBUG_LOG("launcher_icon_cb: app=%s state=%d opening=%d",
+                          app ? app->id : "NULL", s_state, s_opening_app);
+
+    if (app && s_state == APP_MANAGER_STATE_LAUNCHER && !s_opening_app) {
         ESP_LOGI(TAG, "Launcher selected app %s", app->id);
         app_manager_open_app(app->id);
     }
@@ -36,6 +86,365 @@ static void launcher_bind_app_event(lv_obj_t *obj, const app_t *app)
 }
 
 static void app_manager_task(void *arg);
+static void nav_top_pointer_cb(lv_event_t *e);
+static void nav_left_pointer_cb(lv_event_t *e);
+static void nav_bottom_pointer_cb(lv_event_t *e);
+static void nav_right_pointer_cb(lv_event_t *e);
+static void app_manager_handle_top_nav(void);
+static void app_manager_handle_left_nav(void);
+static void app_manager_handle_bottom_nav(void);
+static void app_manager_handle_right_nav(void);
+
+static void bottom_nav_bind_events(lv_obj_t *obj)
+{
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(obj, nav_bottom_pointer_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(obj, nav_bottom_pointer_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(obj, nav_bottom_pointer_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(obj, nav_bottom_pointer_cb, LV_EVENT_PRESS_LOST, NULL);
+}
+
+static void top_overlay_bind_events(lv_obj_t *obj)
+{
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(obj, nav_top_pointer_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(obj, nav_top_pointer_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(obj, nav_top_pointer_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(obj, nav_top_pointer_cb, LV_EVENT_PRESS_LOST, NULL);
+}
+
+static void left_overlay_bind_events(lv_obj_t *obj)
+{
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(obj, nav_left_pointer_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(obj, nav_left_pointer_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(obj, nav_left_pointer_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(obj, nav_left_pointer_cb, LV_EVENT_PRESS_LOST, NULL);
+}
+
+static void right_overlay_bind_events(lv_obj_t *obj)
+{
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(obj, nav_right_pointer_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(obj, nav_right_pointer_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(obj, nav_right_pointer_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(obj, nav_right_pointer_cb, LV_EVENT_PRESS_LOST, NULL);
+}
+
+static lv_obj_t *app_manager_create_content_root(lv_obj_t *parent)
+{
+    lv_obj_t *content = lv_obj_create(parent);
+    lv_obj_remove_style_all(content);
+    lv_obj_set_size(content, LV_PCT(100), LV_PCT(100));
+    lv_obj_align(content, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_clear_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_bottom(content, APP_MANAGER_BOTTOM_NAV_H, 0);
+    return content;
+}
+
+static lv_obj_t *app_manager_create_overlay_bottom(lv_obj_t *parent)
+{
+    lv_obj_t *overlay = lv_obj_create(parent);
+    lv_obj_remove_style_all(overlay);
+    lv_obj_set_size(overlay, LV_PCT(APP_MANAGER_OVERLAY_BOTTOM_W_PCT), APP_MANAGER_OVERLAY_BOTTOM_H);
+    lv_obj_align(overlay, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(overlay, lv_color_hex(APP_MANAGER_OVERLAY_BOTTOM_COLOR), 0);
+    lv_obj_set_style_bg_opa(overlay, APP_MANAGER_OVERLAY_BOTTOM_OPA, 0);
+    lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+    return overlay;
+}
+
+static lv_obj_t *app_manager_create_overlay_top(lv_obj_t *parent)
+{
+    lv_obj_t *overlay = lv_obj_create(parent);
+    lv_obj_remove_style_all(overlay);
+    lv_obj_set_size(overlay, LV_PCT(APP_MANAGER_OVERLAY_TOP_W_PCT), APP_MANAGER_OVERLAY_TOP_H);
+    lv_obj_align(overlay, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_color(overlay, lv_color_hex(APP_MANAGER_OVERLAY_TOP_COLOR), 0);
+    lv_obj_set_style_bg_opa(overlay, APP_MANAGER_OVERLAY_TOP_OPA, 0);
+    top_overlay_bind_events(overlay);
+    return overlay;
+}
+
+static lv_obj_t *app_manager_create_overlay_left(lv_obj_t *parent)
+{
+    lv_obj_t *overlay = lv_obj_create(parent);
+    lv_obj_remove_style_all(overlay);
+    lv_obj_set_size(overlay, APP_MANAGER_OVERLAY_LEFT_W, LV_PCT(APP_MANAGER_OVERLAY_LEFT_H_PCT));
+    lv_obj_align(overlay, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_bg_color(overlay, lv_color_hex(APP_MANAGER_OVERLAY_LEFT_COLOR), 0);
+    lv_obj_set_style_bg_opa(overlay, APP_MANAGER_OVERLAY_LEFT_OPA, 0);
+    lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+    left_overlay_bind_events(overlay);
+    return overlay;
+}
+
+static lv_obj_t *app_manager_create_overlay_right(lv_obj_t *parent)
+{
+    lv_obj_t *overlay = lv_obj_create(parent);
+    lv_obj_remove_style_all(overlay);
+    lv_obj_set_size(overlay, APP_MANAGER_OVERLAY_RIGHT_W, LV_PCT(APP_MANAGER_OVERLAY_RIGHT_H_PCT));
+    lv_obj_align(overlay, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_style_bg_color(overlay, lv_color_hex(APP_MANAGER_OVERLAY_RIGHT_COLOR), 0);
+    lv_obj_set_style_bg_opa(overlay, APP_MANAGER_OVERLAY_RIGHT_OPA, 0);
+    lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
+    right_overlay_bind_events(overlay);
+    return overlay;
+}
+
+static lv_obj_t *app_manager_create_bottom_nav_area(lv_obj_t *parent)
+{
+    lv_obj_t *zone = lv_obj_create(parent);
+    lv_obj_remove_style_all(zone);
+    lv_obj_set_size(zone, LV_PCT(APP_MANAGER_BOTTOM_NAV_W_PCT), APP_MANAGER_BOTTOM_NAV_H);
+    lv_obj_align(zone, LV_ALIGN_BOTTOM_MID, 0, 0);
+    bottom_nav_bind_events(zone);
+
+    lv_obj_t *pill = lv_obj_create(zone);
+    lv_obj_remove_style_all(pill);
+    lv_obj_set_size(pill, LV_PCT(100), APP_MANAGER_HOME_PILL_H);
+    lv_obj_align(pill, LV_ALIGN_BOTTOM_MID, 0, -APP_MANAGER_HOME_LINE_BOTTOM_PAD);
+    lv_obj_set_style_radius(pill, APP_MANAGER_HOME_PILL_H / 2, 0);
+    lv_obj_set_style_bg_color(pill, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(pill, LV_OPA_50, 0);
+    bottom_nav_bind_events(pill);
+
+    return zone;
+}
+
+static void app_manager_create_nav_overlays(lv_obj_t *parent)
+{
+    lv_obj_t *overlay_top = app_manager_create_overlay_top(parent);
+    lv_obj_t *overlay_bottom = app_manager_create_overlay_bottom(parent);
+    lv_obj_t *overlay_left = app_manager_create_overlay_left(parent);
+    lv_obj_t *overlay_right = app_manager_create_overlay_right(parent);
+    app_manager_create_bottom_nav_area(overlay_bottom);
+
+    lv_obj_move_foreground(overlay_top);
+    lv_obj_move_foreground(overlay_bottom);
+    lv_obj_move_foreground(overlay_left);
+    lv_obj_move_foreground(overlay_right);
+}
+
+static void app_manager_handle_top_nav(void)
+{
+    ESP_LOGI(TAG, "Top nav handler called");
+}
+
+static void app_manager_handle_left_nav(void)
+{
+    ESP_LOGI(TAG, "Left nav handler called");
+}
+
+static void app_manager_handle_bottom_nav(void)
+{
+    ESP_LOGI(TAG, "Bottom nav handler called");
+    app_manager_back_to_launcher();
+}
+
+static void app_manager_handle_right_nav(void)
+{
+    ESP_LOGI(TAG, "Right nav handler called");
+}
+
+static void nav_top_pointer_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    APP_MANAGER_DEBUG_LOG("nav_top_pointer_cb: code=%d state=%d", code, s_state);
+
+    if (s_state == APP_MANAGER_STATE_TRANSITION) return;
+
+    lv_indev_t *indev = lv_indev_get_act();
+    APP_MANAGER_DEBUG_LOG("nav_top_pointer_cb: indev=%p", indev);
+    if (!indev) return;
+
+    lv_point_t point;
+    lv_indev_get_point(indev, &point);
+
+    if (code == LV_EVENT_PRESSED) {
+        s_top_overlay_pressed = true;
+        s_top_overlay_press_start = point;
+        APP_MANAGER_DEBUG_LOG("nav_top_pointer_cb: pressed x=%d y=%d", point.x, point.y);
+        return;
+    }
+
+    if (!s_top_overlay_pressed) return;
+
+    int delta_y = point.y - s_top_overlay_press_start.y;
+
+    if (code == LV_EVENT_PRESSING && delta_y >= APP_MANAGER_SWIPE_DOWN_MIN_DISTANCE) {
+        s_top_overlay_pressed = false;
+        ESP_LOGI(TAG, "Top overlay swipe down detected");
+        app_manager_handle_top_nav();
+        return;
+    }
+    if (code == LV_EVENT_RELEASED) {
+        s_top_overlay_pressed = false;
+        if (delta_y >= APP_MANAGER_SWIPE_DOWN_MIN_DISTANCE) {
+            ESP_LOGI(TAG, "Top overlay swipe down detected");
+            app_manager_handle_top_nav();
+        }
+        return;
+    }
+    if (code == LV_EVENT_PRESS_LOST) {
+        s_top_overlay_pressed = false;
+        APP_MANAGER_DEBUG_LOG("nav_top_pointer_cb: press lost");
+    }
+}
+
+static void nav_left_pointer_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    APP_MANAGER_DEBUG_LOG("nav_left_pointer_cb: code=%d state=%d", code, s_state);
+
+    if (s_state == APP_MANAGER_STATE_TRANSITION) return;
+
+    lv_indev_t *indev = lv_indev_get_act();
+    APP_MANAGER_DEBUG_LOG("nav_left_pointer_cb: indev=%p", indev);
+    if (!indev) return;
+
+    lv_point_t point;
+    lv_indev_get_point(indev, &point);
+    APP_MANAGER_DEBUG_LOG("nav_left_pointer_cb: point x=%d y=%d", point.x, point.y);
+
+    if (code == LV_EVENT_PRESSED) {
+        s_left_overlay_pressed = true;
+        s_left_overlay_press_start = point;
+        APP_MANAGER_DEBUG_LOG("nav_left_pointer_cb: pressed x=%d y=%d", point.x, point.y);
+        return;
+    }
+
+    if (!s_left_overlay_pressed) return;
+
+    int delta_x = point.x - s_left_overlay_press_start.x;
+    APP_MANAGER_DEBUG_LOG("nav_left_pointer_cb: delta_x=%d", delta_x);
+
+    if (code == LV_EVENT_PRESSING && delta_x >= APP_MANAGER_SWIPE_SIDE_MIN_DISTANCE) {
+        s_left_overlay_pressed = false;
+        ESP_LOGI(TAG, "Left overlay swipe right detected");
+        app_manager_handle_left_nav();
+        return;
+    }
+
+    if (code == LV_EVENT_RELEASED) {
+        s_left_overlay_pressed = false;
+        if (delta_x >= APP_MANAGER_SWIPE_SIDE_MIN_DISTANCE) {
+            ESP_LOGI(TAG, "Left overlay swipe right detected");
+            app_manager_handle_left_nav();
+        }
+        return;
+    }
+
+    if (code == LV_EVENT_PRESS_LOST) {
+        s_left_overlay_pressed = false;
+        APP_MANAGER_DEBUG_LOG("nav_left_pointer_cb: press lost");
+    }
+}
+
+static void nav_right_pointer_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    APP_MANAGER_DEBUG_LOG("nav_right_pointer_cb: code=%d state=%d", code, s_state);
+
+    if (s_state == APP_MANAGER_STATE_TRANSITION) return;
+
+    lv_indev_t *indev = lv_indev_get_act();
+    APP_MANAGER_DEBUG_LOG("nav_right_pointer_cb: indev=%p", indev);
+    if (!indev) return;
+
+    lv_point_t point;
+    lv_indev_get_point(indev, &point);
+    APP_MANAGER_DEBUG_LOG("nav_right_pointer_cb: point x=%d y=%d", point.x, point.y);
+
+    if (code == LV_EVENT_PRESSED) {
+        s_right_overlay_pressed = true;
+        s_right_overlay_press_start = point;
+        APP_MANAGER_DEBUG_LOG("nav_right_pointer_cb: pressed x=%d y=%d", point.x, point.y);
+        return;
+    }
+
+    if (!s_right_overlay_pressed) return;
+
+    int delta_x = s_right_overlay_press_start.x - point.x;
+    APP_MANAGER_DEBUG_LOG("nav_right_pointer_cb: delta_x=%d", delta_x);
+
+    if (code == LV_EVENT_PRESSING && delta_x >= APP_MANAGER_SWIPE_SIDE_MIN_DISTANCE) {
+        s_right_overlay_pressed = false;
+        ESP_LOGI(TAG, "Right overlay swipe left detected");
+        app_manager_handle_right_nav();
+        return;
+    }
+
+    if (code == LV_EVENT_RELEASED) {
+        s_right_overlay_pressed = false;
+        if (delta_x >= APP_MANAGER_SWIPE_SIDE_MIN_DISTANCE) {
+            ESP_LOGI(TAG, "Right overlay swipe left detected");
+            app_manager_handle_right_nav();
+        }
+        return;
+    }
+
+    if (code == LV_EVENT_PRESS_LOST) {
+        s_right_overlay_pressed = false;
+        APP_MANAGER_DEBUG_LOG("nav_right_pointer_cb: press lost");
+    }
+}
+
+static void nav_bottom_pointer_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    APP_MANAGER_DEBUG_LOG("nav_bottom_pointer_cb: code=%d state=%d", code, s_state);
+
+    if (s_state == APP_MANAGER_STATE_TRANSITION) return;
+
+    lv_indev_t *indev = lv_indev_get_act();
+    APP_MANAGER_DEBUG_LOG("nav_bottom_pointer_cb: indev=%p", indev);
+    if (!indev) return;
+
+    lv_point_t point;
+    lv_indev_get_point(indev, &point);
+
+    if (code == LV_EVENT_PRESSED) {
+        s_bottom_nav_pressed = true;
+        s_bottom_nav_press_start = point;
+        APP_MANAGER_DEBUG_LOG("nav_bottom_pointer_cb: pressed x=%d y=%d", point.x, point.y);
+        return;
+    }
+
+    if (!s_bottom_nav_pressed) return;
+
+    int delta_y = s_bottom_nav_press_start.y - point.y;
+    APP_MANAGER_DEBUG_LOG("nav_bottom_pointer_cb: point x=%d y=%d delta_y=%d", point.x, point.y, delta_y);
+
+    if (code == LV_EVENT_PRESSING && delta_y >= APP_MANAGER_SWIPE_UP_MIN_DISTANCE) {
+        s_bottom_nav_pressed = false;
+        APP_MANAGER_DEBUG_LOG("nav_bottom_pointer_cb: swipe up detected while pressing");
+        app_manager_handle_bottom_nav();
+        return;
+    }
+
+    if (code == LV_EVENT_RELEASED) {
+        s_bottom_nav_pressed = false;
+        if (delta_y >= APP_MANAGER_SWIPE_UP_MIN_DISTANCE) {
+            APP_MANAGER_DEBUG_LOG("nav_bottom_pointer_cb: swipe up detected on release");
+            app_manager_handle_bottom_nav();
+        }
+        return;
+    }
+
+    if (code == LV_EVENT_PRESS_LOST) {
+        s_bottom_nav_pressed = false;
+        APP_MANAGER_DEBUG_LOG("nav_bottom_pointer_cb: press lost");
+    }
+}
 
 esp_err_t app_manager_init(void)
 {
@@ -46,7 +455,7 @@ esp_err_t app_manager_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    /* UI task: runs LVGL handler and processes UI events */
+    /* UI task: processes app events; BSP's LVGL port runs lv_timer_handler(). */
     xTaskCreate(app_manager_task, "app_mgr", 6144, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "app_manager initialized");
@@ -57,27 +466,14 @@ static void app_manager_task(void *arg)
 {
     app_event_t ev;
     for (;;) {
-        /* LVGL timer handler */
-        lv_timer_handler();
-
-        /* process events */
+        /* Process app events only; BSP's LVGL port owns lv_timer_handler(). */
         while (xQueueReceive(s_ui_queue, &ev, 0) == pdTRUE) {
             if (s_current_app && s_current_app->event_handler) {
                 bsp_display_lock(0);
                 s_current_app->event_handler(&ev);
                 bsp_display_unlock();
             } else {
-                if (ev.type == APP_EVT_APP_FINISHED) {
-                    if (s_current_app && s_current_app->stop_backend) s_current_app->stop_backend();
-                    if (s_current_root) {
-                        bsp_display_lock(0);
-                        lv_obj_del(s_current_root);
-                        bsp_display_unlock();
-                        s_current_root = NULL;
-                        s_current_app = NULL;
-                    }
-                    if (s_launcher_root) lv_scr_load(s_launcher_root);
-                }
+                if (ev.type == APP_EVT_APP_FINISHED) app_manager_back_to_launcher();
             }
         }
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -100,10 +496,14 @@ QueueHandle_t app_manager_get_event_queue(void)
 
 esp_err_t app_manager_show_launcher(const app_hw_status_t *hw_status)
 {
+    (void)hw_status;
+
     if (!s_ui_queue) return ESP_ERR_INVALID_STATE;
+    if (s_state == APP_MANAGER_STATE_TRANSITION) return ESP_ERR_INVALID_STATE;
 
     /* Create a fixed 3x3 launcher grid and center the whole grid on screen. */
     bsp_display_lock(0);
+    lv_obj_t *old_launcher = s_launcher_root;
     lv_obj_t *scr = lv_obj_create(NULL);
     const int cols = 3;
     const int rows = 3;
@@ -166,8 +566,13 @@ esp_err_t app_manager_show_launcher(const app_hw_status_t *hw_status)
         launcher_bind_app_event(lbl, app);
     }
 
+    app_manager_create_nav_overlays(scr);
+
     lv_scr_load(scr);
     s_launcher_root = scr;
+    s_state = APP_MANAGER_STATE_LAUNCHER;
+    s_opening_app = false;
+    if (old_launcher && old_launcher != scr) lv_obj_del_async(old_launcher);
     bsp_display_unlock();
     ESP_LOGI(TAG, "Launcher shown with %d apps", s_reg_count);
     return ESP_OK;
@@ -186,18 +591,67 @@ esp_err_t app_manager_open_app(const char *app_id)
     const app_t *app = find_app_by_id(app_id);
     if (!app) return ESP_ERR_NOT_FOUND;
     if (!s_ui_queue) return ESP_ERR_INVALID_STATE;
+    if (s_state != APP_MANAGER_STATE_LAUNCHER || s_opening_app) return ESP_ERR_INVALID_STATE;
+
+    s_opening_app = true;
+    s_state = APP_MANAGER_STATE_TRANSITION;
+
+    if (s_current_app && s_current_app->stop_backend) s_current_app->stop_backend();
+    lv_obj_t *old_root = s_current_root;
 
     bsp_display_lock(0);
     lv_obj_t *scr = lv_obj_create(NULL);
-    lv_scr_load(scr);
-    bsp_display_unlock();
+    lv_obj_set_size(scr, LV_PCT(100), LV_PCT(100));
+    lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *content = app_manager_create_content_root(scr);
+    app_manager_create_nav_overlays(scr);
 
     s_current_root = scr;
     s_current_app = app;
 
-    if (app->open) app->open(scr);
+    bsp_display_unlock();
+
+    if (app->open) app->open(content);
+
+    bsp_display_lock(0);
+    lv_scr_load(scr);
+    if (old_root) lv_obj_del_async(old_root);
+    s_state = APP_MANAGER_STATE_APP;
+    s_opening_app = false;
+    bsp_display_unlock();
+
     if (app->start_backend) app->start_backend();
 
     ESP_LOGI(TAG, "Opened app %s", app->id);
+    return ESP_OK;
+}
+
+esp_err_t app_manager_back_to_launcher(void)
+{
+    if (!s_ui_queue) return ESP_ERR_INVALID_STATE;
+    if (s_state != APP_MANAGER_STATE_APP) return ESP_OK;
+
+    s_state = APP_MANAGER_STATE_TRANSITION;
+
+    if (s_current_app && s_current_app->stop_backend) s_current_app->stop_backend();
+
+    bsp_display_lock(0);
+
+    lv_obj_t *old_app_screen = s_current_root;
+    s_current_root = NULL;
+    s_current_app = NULL;
+
+    if (s_launcher_root) lv_scr_load(s_launcher_root);
+    if (old_app_screen) lv_obj_del_async(old_app_screen);
+
+    s_state = APP_MANAGER_STATE_LAUNCHER;
+    s_opening_app = false;
+
+    bsp_display_unlock();
+
+    if (!s_launcher_root) return app_manager_show_launcher(NULL);
+
+    ESP_LOGI(TAG, "Returned to launcher");
     return ESP_OK;
 }
