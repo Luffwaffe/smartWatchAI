@@ -1,0 +1,9 @@
+#pragma once
+
+#define AI_TALK_APP_ID "ai_talk"
+#define AI_TALK_APP_NAME "AI-Talk"
+
+#define AI_TALK_COUNT_START_VALUE 1
+#define AI_TALK_COUNT_END_VALUE 100
+#define AI_TALK_BACKEND_TASK_STACK_SIZE 4096
+#define AI_TALK_BACKEND_TASK_PRIORITY 5

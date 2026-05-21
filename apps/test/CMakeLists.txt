@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS
+        "src/test.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        app_manager
+        lvgl
+        waveshare__esp32_c6_touch_amoled_2_06
+)

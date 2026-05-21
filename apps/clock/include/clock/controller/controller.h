@@ -1,0 +1,5 @@
+#pragma once
+
+#include "app_manager.h"
+
+void clock_controller_handle_ui_event(const app_event_t *event);

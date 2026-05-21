@@ -1,0 +1,15 @@
+idf_component_register(
+    SRCS
+        "src/ai_talk.c"
+        "src/context.c"
+        "src/view/view.c"
+        "src/controller/controller.c"
+        "src/service/service.c"
+        "src/store/store.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        app_manager
+        lvgl
+        waveshare__esp32_c6_touch_amoled_2_06
+)

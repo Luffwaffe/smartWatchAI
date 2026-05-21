@@ -4,7 +4,11 @@
 #include "esp_log.h"
 
 #include "app_init.h"
-#include "ui/ui_manager.h"
+#include "ai_talk/ai_talk.h"
+#include "clock/clock.h"
+#include "setting/setting.h"
+#include "test/test.h"
+#include "app_manager.h"
 
 static const char *TAG = "app_main";
 
@@ -16,8 +20,17 @@ void app_main(void)
 
     app_hw_status_t hw_status;
     ESP_ERROR_CHECK(app_system_init(&hw_status));
-    ESP_ERROR_CHECK(ui_manager_start(&hw_status));
+    ESP_ERROR_CHECK(app_manager_init());
 
+    //App registration
+    clock_app_register();
+    ai_talk_app_register();
+    setting_app_register();
+    test_app_register();
+    ESP_ERROR_CHECK(app_manager_show_launcher(&hw_status));
+
+    //end
+    
     ESP_LOGI(TAG, "=================================================");
     ESP_LOGI(TAG, " Initialization Complete");
     ESP_LOGI(TAG, "=================================================");
