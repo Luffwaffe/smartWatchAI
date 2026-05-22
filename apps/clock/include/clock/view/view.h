@@ -4,4 +4,6 @@
 #include "lvgl.h"
 
 esp_err_t clock_view_open(lv_obj_t *root);
-void clock_view_render_count(int count);
+void clock_view_close(void);
+void clock_view_next_theme(void);
+void clock_view_prev_theme(void);

@@ -3,10 +3,16 @@ idf_component_register(
         "src/clock.c"
         "src/context.c"
         "src/view/view.c"
+        "src/view/themes/theme_analog.c"
+        "src/view/themes/theme_digital.c"
+        "src/view/themes/theme_simple.c"
         "src/controller/controller.c"
         "src/service/service.c"
-        "src/store/store.c"
+        "assets/generated/clock_font_montserrat_bold_60.c"
+        "assets/generated/clock_font_montserrat_bold_137.c"
+        "assets/generated/Technology.c"
         "assets/generated/watchface.c"
+        "assets/generated/theme_simple_background.c"
     INCLUDE_DIRS
         "include"
     REQUIRES

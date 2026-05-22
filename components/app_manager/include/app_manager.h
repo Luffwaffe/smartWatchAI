@@ -12,6 +12,10 @@ typedef struct app_hw_status_t app_hw_status_t;
 typedef enum {
     APP_EVT_COUNTDOWN_UPDATE = 1,
     APP_EVT_APP_FINISHED = 2,
+    APP_EVT_NAV_TOP = 3,
+    APP_EVT_NAV_LEFT = 4,
+    APP_EVT_NAV_BOTTOM = 5,
+    APP_EVT_NAV_RIGHT = 6,
 } app_event_type_t;
 
 typedef struct {
@@ -23,6 +27,7 @@ typedef struct app {
     const char *id;
     const char *name;
     const void *icon; /* optional pointer to image resource */
+    void (*close)(void);               /* called on UI thread before screen cleanup */
     esp_err_t (*open)(lv_obj_t *root); /* called on UI thread */
     esp_err_t (*start_backend)(void);  /* spawn backend task */
     esp_err_t (*stop_backend)(void);   /* request backend stop */

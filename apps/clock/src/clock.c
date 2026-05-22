@@ -11,6 +11,7 @@ static const app_t s_clock_app = {
     .name = CLOCK_APP_NAME,
     .icon = NULL,
     .open = clock_view_open,
+    .close = clock_view_close,
     .start_backend = clock_service_start,
     .stop_backend = clock_service_stop,
     .event_handler = clock_controller_handle_ui_event,

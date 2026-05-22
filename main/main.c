@@ -6,6 +6,7 @@
 #include "app_init.h"
 #include "ai_talk/ai_talk.h"
 #include "clock/clock.h"
+#include "clock/contract.h"
 #include "setting/setting.h"
 #include "test/test.h"
 #include "app_manager.h"
@@ -27,7 +28,8 @@ void app_main(void)
     ai_talk_app_register();
     setting_app_register();
     test_app_register();
-    ESP_ERROR_CHECK(app_manager_show_launcher(&hw_status));
+    // ESP_ERROR_CHECK(app_manager_show_launcher(&hw_status));
+    ESP_ERROR_CHECK(app_manager_open_app(CLOCK_APP_ID));
 
     //end
     

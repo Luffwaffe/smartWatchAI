@@ -94,6 +94,7 @@ static void app_manager_handle_top_nav(void);
 static void app_manager_handle_left_nav(void);
 static void app_manager_handle_bottom_nav(void);
 static void app_manager_handle_right_nav(void);
+static void app_manager_dispatch_nav_event(app_event_type_t type);
 
 static void bottom_nav_bind_events(lv_obj_t *obj)
 {
@@ -229,14 +230,29 @@ static void app_manager_create_nav_overlays(lv_obj_t *parent)
     lv_obj_move_foreground(overlay_right);
 }
 
+static void app_manager_dispatch_nav_event(app_event_type_t type)
+{
+    if (s_state != APP_MANAGER_STATE_APP || !s_current_app || !s_current_app->event_handler) {
+        return;
+    }
+
+    app_event_t event = {
+        .type = type,
+        .value = 0,
+    };
+    s_current_app->event_handler(&event);
+}
+
 static void app_manager_handle_top_nav(void)
 {
     ESP_LOGI(TAG, "Top nav handler called");
+    app_manager_dispatch_nav_event(APP_EVT_NAV_TOP);
 }
 
 static void app_manager_handle_left_nav(void)
 {
     ESP_LOGI(TAG, "Left nav handler called");
+    app_manager_dispatch_nav_event(APP_EVT_NAV_LEFT);
 }
 
 static void app_manager_handle_bottom_nav(void)
@@ -248,6 +264,7 @@ static void app_manager_handle_bottom_nav(void)
 static void app_manager_handle_right_nav(void)
 {
     ESP_LOGI(TAG, "Right nav handler called");
+    app_manager_dispatch_nav_event(APP_EVT_NAV_RIGHT);
 }
 
 static void nav_top_pointer_cb(lv_event_t *e)
@@ -596,6 +613,7 @@ esp_err_t app_manager_open_app(const char *app_id)
     s_state = APP_MANAGER_STATE_TRANSITION;
 
     if (s_current_app && s_current_app->stop_backend) s_current_app->stop_backend();
+    if (s_current_app && s_current_app->close) s_current_app->close();
     lv_obj_t *old_root = s_current_root;
 
     bsp_display_lock(0);
@@ -608,12 +626,7 @@ esp_err_t app_manager_open_app(const char *app_id)
 
     s_current_root = scr;
     s_current_app = app;
-
-    bsp_display_unlock();
-
     if (app->open) app->open(content);
-
-    bsp_display_lock(0);
     lv_scr_load(scr);
     if (old_root) lv_obj_del_async(old_root);
     s_state = APP_MANAGER_STATE_APP;
@@ -638,6 +651,7 @@ esp_err_t app_manager_back_to_launcher(void)
     bsp_display_lock(0);
 
     lv_obj_t *old_app_screen = s_current_root;
+    if (s_current_app && s_current_app->close) s_current_app->close();
     s_current_root = NULL;
     s_current_app = NULL;
 
