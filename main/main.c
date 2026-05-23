@@ -8,7 +8,7 @@
 #include "clock/clock.h"
 #include "clock/contract.h"
 #include "setting/setting.h"
-#include "test/test.h"
+#include "device/device.h"
 #include "app_manager.h"
 
 static const char *TAG = "app_main";
@@ -27,7 +27,7 @@ void app_main(void)
     clock_app_register();
     ai_talk_app_register();
     setting_app_register();
-    test_app_register();
+    device_app_register();
     // ESP_ERROR_CHECK(app_manager_show_launcher(&hw_status));
     ESP_ERROR_CHECK(app_manager_open_app(CLOCK_APP_ID));
 

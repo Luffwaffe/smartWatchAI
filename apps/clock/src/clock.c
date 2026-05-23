@@ -6,10 +6,12 @@
 #include "clock/view/view.h"
 #include "app_manager.h"
 
+extern const lv_image_dsc_t clock_icon;
+
 static const app_t s_clock_app = {
     .id = CLOCK_APP_ID,
     .name = CLOCK_APP_NAME,
-    .icon = NULL,
+    .icon = &clock_icon,
     .open = clock_controller_open,
     .close = clock_view_close,
     .start_backend = clock_service_start,

@@ -2,7 +2,7 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.5)
 
-set(EXTRA_COMPONENT_DIRS apps/clock apps/ai_talk apps/setting apps/test)
+set(EXTRA_COMPONENT_DIRS apps/clock apps/ai_talk apps/setting apps/device)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 

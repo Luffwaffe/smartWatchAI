@@ -6,10 +6,12 @@
 #include "ai_talk/view/view.h"
 #include "app_manager.h"
 
+extern const lv_image_dsc_t ai_icon;
+
 static const app_t s_ai_talk_app = {
     .id = AI_TALK_APP_ID,
     .name = AI_TALK_APP_NAME,
-    .icon = NULL,
+    .icon = &ai_icon,
     .open = ai_talk_view_open,
     .start_backend = ai_talk_service_start,
     .stop_backend = ai_talk_service_stop,

@@ -6,6 +6,8 @@
 
 #include "app_manager.h"
 #include "app_gesture.h"
+#include "launcherView.h"
+#include "quick_panel.h"
 #include "esp_log.h"
 #include "bsp/esp-bsp.h"
 #include <string.h>
@@ -90,12 +92,27 @@ static void app_manager_gesture_dispatch_app_event(app_event_type_t type, void *
 static void app_manager_gesture_show_quick_panel(void *user_ctx)
 {
     (void)user_ctx;
-    ESP_LOGI(TAG, "Quick panel action is not implemented yet");
+    lv_obj_t *parent = lv_scr_act();
+    esp_err_t err = quick_panel_show(parent);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to show quick panel: %s", esp_err_to_name(err));
+        return;
+    }
+
+    lv_obj_t *quick_panel_root = quick_panel_get_root();
+    if (quick_panel_root) {
+        app_gesture_attach(quick_panel_root);
+    }
 }
 
 static void app_manager_gesture_back_to_launcher(void *user_ctx)
 {
     (void)user_ctx;
+    if (quick_panel_is_visible()) {
+        quick_panel_hide();
+        return;
+    }
+
     app_manager_back_to_launcher();
 }
 
@@ -175,69 +192,12 @@ esp_err_t app_manager_show_launcher(const app_hw_status_t *hw_status)
     if (!s_ui_queue) return ESP_ERR_INVALID_STATE;
     if (s_state == APP_MANAGER_STATE_TRANSITION) return ESP_ERR_INVALID_STATE;
 
-    /* Create a fixed 3x3 launcher grid and center the whole grid on screen. */
     bsp_display_lock(0);
     lv_obj_t *old_launcher = s_launcher_root;
-    lv_obj_t *scr = lv_obj_create(NULL);
-    const int cols = 3;
-    const int rows = 3;
-    const int max_items = cols * rows;
-    enum {
-        btn_w = 94,
-        btn_h = 94,
-        cell_w = 114,
-        cell_h = 114,
-    };
-    static lv_coord_t col_dsc[] = { cell_w, cell_w, cell_w, LV_GRID_TEMPLATE_LAST };
-    static lv_coord_t row_dsc[] = { cell_h, cell_h, cell_h, LV_GRID_TEMPLATE_LAST };
-
-    lv_obj_set_size(scr, LV_PCT(100), LV_PCT(100));
-    lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t *grid = lv_obj_create(scr);
-    lv_obj_remove_style_all(grid);
-    lv_obj_set_size(grid, cols * cell_w, rows * cell_h);
-    lv_obj_set_layout(grid, LV_LAYOUT_GRID);
-    lv_obj_set_grid_dsc_array(grid, col_dsc, row_dsc);
-    lv_obj_center(grid);
-
-    for (int i = 0; i < s_reg_count && i < max_items; ++i) {
-        const app_t *app = s_registry[i];
-        int row = i / cols;
-        int col = i % cols;
-
-        lv_obj_t *cell = lv_obj_create(grid);
-        lv_obj_remove_style_all(cell);
-        lv_obj_set_grid_cell(cell,
-                             LV_GRID_ALIGN_STRETCH, col, 1,
-                             LV_GRID_ALIGN_STRETCH, row, 1);
-        lv_obj_set_flex_flow(cell, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(cell, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        launcher_bind_app_event(cell, app);
-
-        lv_obj_t *btn = lv_btn_create(cell);
-        lv_obj_set_size(btn, btn_w, btn_h);
-        launcher_bind_app_event(btn, app);
-
-        if (app->icon != NULL) {
-            lv_obj_t *icon = lv_img_create(btn);
-            lv_img_set_src(icon, app->icon);
-            lv_obj_center(icon);
-            launcher_bind_app_event(icon, app);
-        } else {
-            lv_obj_t *placeholder = lv_label_create(btn);
-            const char *title = app->name ? app->name : app->id;
-            char initial[2] = { title && title[0] ? title[0] : '?', '\0' };
-            lv_label_set_text(placeholder, initial);
-            lv_obj_center(placeholder);
-            launcher_bind_app_event(placeholder, app);
-        }
-
-        lv_obj_t *lbl = lv_label_create(cell);
-        lv_label_set_text(lbl, app->name ? app->name : app->id);
-        lv_obj_set_width(lbl, LV_PCT(100));
-        lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-        launcher_bind_app_event(lbl, app);
+    lv_obj_t *scr = launcher_view_create(s_registry, s_reg_count, launcher_bind_app_event);
+    if (!scr) {
+        bsp_display_unlock();
+        return ESP_ERR_NO_MEM;
     }
 
     app_manager_create_nav_overlays(scr);

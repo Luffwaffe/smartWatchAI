@@ -3,6 +3,8 @@
 #include "setting/contract.h"
 #include "app_manager.h"
 
+extern const lv_image_dsc_t setting_icon;
+
 static esp_err_t setting_view_open(lv_obj_t *root)
 {
     lv_obj_t *label = lv_label_create(root);
@@ -16,7 +18,7 @@ static esp_err_t setting_view_open(lv_obj_t *root)
 static const app_t s_setting_app = {
     .id = SETTING_APP_ID,
     .name = SETTING_APP_NAME,
-    .icon = NULL,
+    .icon = &setting_icon,
     .open = setting_view_open,
     .start_backend = NULL,
     .stop_backend = NULL,

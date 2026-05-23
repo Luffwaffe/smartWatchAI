@@ -11,7 +11,7 @@ idf_component_register(
         ai_talk
         clock
         setting
-        test
+        device
         bsp_extra
         nvs_flash
 )

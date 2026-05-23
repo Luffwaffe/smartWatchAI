@@ -12,6 +12,7 @@ idf_component_register(
         "assets/generated/clock_font_montserrat_bold_60.c"
         "assets/generated/clock_font_montserrat_bold_137.c"
         "assets/generated/Technology.c"
+        "assets/generated/clock_icon.c"
         "assets/generated/watchface.c"
         "assets/generated/theme_simple_background.c"
     INCLUDE_DIRS
