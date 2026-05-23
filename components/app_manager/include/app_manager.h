@@ -16,6 +16,7 @@ typedef enum {
     APP_EVT_NAV_LEFT = 4,
     APP_EVT_NAV_BOTTOM = 5,
     APP_EVT_NAV_RIGHT = 6,
+    APP_EVT_CLOCK_DATETIME_UPDATE = 7,
 } app_event_type_t;
 
 typedef struct {

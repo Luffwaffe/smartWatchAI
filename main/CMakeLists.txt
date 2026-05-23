@@ -7,6 +7,7 @@ idf_component_register(
         .
     REQUIRES
         app_manager
+        rtc_manager
         ai_talk
         clock
         setting

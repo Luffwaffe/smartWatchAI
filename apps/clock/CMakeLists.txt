@@ -8,6 +8,7 @@ idf_component_register(
         "src/view/themes/theme_simple.c"
         "src/controller/controller.c"
         "src/service/service.c"
+        "src/service/rtc_update.c"
         "assets/generated/clock_font_montserrat_bold_60.c"
         "assets/generated/clock_font_montserrat_bold_137.c"
         "assets/generated/Technology.c"
@@ -17,6 +18,7 @@ idf_component_register(
         "include"
     REQUIRES
         app_manager
+        rtc_manager
         lvgl
         waveshare__esp32_c6_touch_amoled_2_06
 )

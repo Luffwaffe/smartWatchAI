@@ -1,0 +1,9 @@
+idf_component_register(
+    SRCS
+        "src/rtc_manager.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        driver
+        waveshare__pcf85063a
+)

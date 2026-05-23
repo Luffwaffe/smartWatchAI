@@ -57,6 +57,11 @@ static void clock_view_render_current_theme(void)
     if (theme->open) {
         theme->open(context->theme_container);
     }
+
+    clock_rtc_datetime_t datetime;
+    if (clock_context_get_datetime(&datetime)) {
+        clock_view_set_datetime(&datetime);
+    }
 }
 
 esp_err_t clock_view_open(lv_obj_t *root)
@@ -117,4 +122,35 @@ void clock_view_prev_theme(void)
 
     context->current_theme = (context->current_theme + theme_count - 1) % theme_count;
     clock_view_render_current_theme();
+}
+
+void clock_view_set_datetime(const clock_rtc_datetime_t *datetime)
+{
+    if (datetime == NULL) {
+        return;
+    }
+
+    clock_context_t *context = clock_context_get();
+
+    if (context->hour_label) {
+        lv_label_set_text_fmt(context->hour_label, "%02d", datetime->hour);
+    }
+    if (context->minute_label) {
+        lv_label_set_text_fmt(context->minute_label, "%02d", datetime->minute);
+    }
+    if (context->second_label) {
+        lv_label_set_text_fmt(context->second_label, "%02d", datetime->second);
+    }
+
+    if (context->day_label && context->month_label && context->year_label) {
+        lv_label_set_text_fmt(context->day_label, "%02d", datetime->day);
+        lv_label_set_text_fmt(context->month_label, "%02d", datetime->month);
+        lv_label_set_text_fmt(context->year_label, "%04d", datetime->year);
+    } else if (context->day_label) {
+        lv_label_set_text_fmt(context->day_label,
+                              "%02d/%02d/%04d",
+                              datetime->day,
+                              datetime->month,
+                              datetime->year);
+    }
 }

@@ -15,8 +15,8 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "pcf85063a.h"
 #include "qmi8658.h"
+#include "rtc_manager.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,7 +31,6 @@ static const char *TAG = "app_init";
 
 static i2c_master_bus_handle_t s_i2c_bus_handle = NULL;
 static qmi8658_dev_t s_imu_device;
-static pcf85063a_dev_t s_rtc_device;
 static lv_display_t *s_display = NULL;
 
 static esp_err_t init_nvs(void)
@@ -106,7 +105,7 @@ static esp_err_t init_rtc(void)
     }
     ESP_RETURN_ON_FALSE(s_i2c_bus_handle != NULL, ESP_FAIL, TAG, "Failed to get I2C bus handle");
 
-    ESP_RETURN_ON_ERROR(pcf85063a_init(&s_rtc_device, s_i2c_bus_handle, APP_PCF85063_I2C_ADDRESS),
+    ESP_RETURN_ON_ERROR(rtc_manager_init(s_i2c_bus_handle, APP_PCF85063_I2C_ADDRESS),
                         TAG, "Failed to initialize RTC");
 
     ESP_LOGI(TAG, "RTC initialized successfully");
