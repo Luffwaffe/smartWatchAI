@@ -17,6 +17,7 @@ typedef enum {
     APP_EVT_NAV_BOTTOM = 5,
     APP_EVT_NAV_RIGHT = 6,
     APP_EVT_CLOCK_DATETIME_UPDATE = 7,
+    APP_EVT_BLUETOOTH_STATUS_CHANGED = 8,
 } app_event_type_t;
 
 typedef struct {

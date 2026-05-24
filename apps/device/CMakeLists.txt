@@ -1,11 +1,17 @@
 idf_component_register(
     SRCS
         "src/device.c"
+        "src/controller/controller.c"
+        "src/service/service.c"
+        "src/view/view.c"
         "assets/generated/icon.c"
     INCLUDE_DIRS
         "include"
     REQUIRES
+        common
         app_manager
+        bluetooth_manager
+        data_center
         lvgl
         waveshare__esp32_c6_touch_amoled_2_06
 )

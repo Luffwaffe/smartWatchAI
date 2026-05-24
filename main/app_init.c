@@ -7,9 +7,11 @@
 #include <string.h>
 
 #include "app_config.h"
+#include "bluetooth_manager.h"
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
 #include "bsp_board_extra.h"
+#include "data_center.h"
 #include "driver/i2c_master.h"
 #include "esp_check.h"
 #include "esp_err.h"
@@ -33,6 +35,21 @@ static i2c_master_bus_handle_t s_i2c_bus_handle = NULL;
 static qmi8658_dev_t s_imu_device;
 static lv_display_t *s_display = NULL;
 
+static lv_display_t *start_display_with_perf_config(void)
+{
+    bsp_display_cfg_t cfg = {
+        .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
+        .buffer_size = BSP_LCD_H_RES * 10,
+        .double_buffer = true,
+        .flags = {
+            .buff_dma = true,
+            .buff_spiram = false,
+        },
+    };
+
+    return bsp_display_start_with_config(&cfg);
+}
+
 static esp_err_t init_nvs(void)
 {
     ESP_LOGI(TAG, "Initializing NVS...");
@@ -53,7 +70,7 @@ static esp_err_t init_display(void)
 {
     ESP_LOGI(TAG, "Initializing display and touch...");
 
-    s_display = bsp_display_start();
+    s_display = start_display_with_perf_config();
     ESP_RETURN_ON_FALSE(s_display != NULL, ESP_FAIL, TAG, "Failed to initialize display");
 
     bsp_display_backlight_on();
@@ -134,6 +151,29 @@ static esp_err_t init_audio(void)
     return ESP_OK;
 }
 
+static esp_err_t init_bluetooth_manager(void)
+{
+    ESP_LOGI(TAG, "Initializing Bluetooth manager...");
+
+    ESP_RETURN_ON_ERROR(bluetooth_manager_init(), TAG, "Failed to initialize Bluetooth manager");
+    ESP_RETURN_ON_ERROR(bluetooth_manager_init_ble_stack(), TAG, "Failed to initialize BLE stack");
+    ESP_RETURN_ON_ERROR(bluetooth_manager_start(), TAG, "Failed to start Bluetooth manager");
+
+    ESP_LOGI(TAG, "Bluetooth manager started");
+    return ESP_OK;
+}
+
+static esp_err_t init_data_center(void)
+{
+    ESP_LOGI(TAG, "Initializing data center...");
+
+    ESP_RETURN_ON_ERROR(data_center_init(), TAG, "Failed to initialize data center");
+    ESP_RETURN_ON_ERROR(data_center_start(), TAG, "Failed to start data center");
+
+    ESP_LOGI(TAG, "Data center started");
+    return ESP_OK;
+}
+
 static void log_optional_init_result(const char *name, esp_err_t ret)
 {
     if (ret != ESP_OK) {
@@ -172,6 +212,12 @@ esp_err_t app_system_init(app_hw_status_t *status)
     hw->audio_ok = (ret == ESP_OK);
     hw->mic_ok = hw->audio_ok;
     log_optional_init_result("Audio", ret);
+
+    ret = init_data_center();
+    log_optional_init_result("Data center", ret);
+
+    ret = init_bluetooth_manager();
+    log_optional_init_result("Bluetooth manager", ret);
 
     return ESP_OK;
 }

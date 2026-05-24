@@ -7,6 +7,8 @@ idf_component_register(
         .
     REQUIRES
         app_manager
+        bluetooth_manager
+        data_center
         rtc_manager
         ai_talk
         clock

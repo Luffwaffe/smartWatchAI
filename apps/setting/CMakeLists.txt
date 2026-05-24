@@ -5,6 +5,7 @@ idf_component_register(
     INCLUDE_DIRS
         "include"
     REQUIRES
+        common
         app_manager
         lvgl
         waveshare__esp32_c6_touch_amoled_2_06
