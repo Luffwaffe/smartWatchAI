@@ -40,6 +40,15 @@ typedef enum {
     BLUETOOTH_MANAGER_EVT_ERROR,
 } bluetooth_manager_event_type_t;
 
+typedef enum {
+    BLUETOOTH_MANAGER_MEDIA_KEY_PLAY_PAUSE = 0,
+    BLUETOOTH_MANAGER_MEDIA_KEY_NEXT_TRACK,
+    BLUETOOTH_MANAGER_MEDIA_KEY_PREVIOUS_TRACK,
+    BLUETOOTH_MANAGER_MEDIA_KEY_VOLUME_UP,
+    BLUETOOTH_MANAGER_MEDIA_KEY_VOLUME_DOWN,
+    BLUETOOTH_MANAGER_MEDIA_KEY_MUTE,
+} bluetooth_manager_media_key_t;
+
 typedef struct {
     bool enabled;
     bluetooth_manager_state_t state;
@@ -76,6 +85,7 @@ esp_err_t bluetooth_manager_get_status(bluetooth_manager_status_t *status);
 
 esp_err_t bluetooth_manager_send_message(const bluetooth_manager_message_t *message);
 esp_err_t bluetooth_manager_send_raw(const uint8_t *data, size_t len);
+esp_err_t bluetooth_manager_send_media_key(bluetooth_manager_media_key_t key);
 esp_err_t bluetooth_manager_on_raw_received(const uint8_t *data, size_t len);
 esp_err_t bluetooth_manager_mock_connect_phone(const char *name, const char *address);
 

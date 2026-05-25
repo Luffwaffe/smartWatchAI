@@ -4,17 +4,18 @@
 
 static lv_obj_t *s_root = NULL;
 static lv_obj_t *s_status_label = NULL;
-static lv_obj_t *s_switch = NULL;
+static lv_obj_t *s_power_btn = NULL;
+static lv_obj_t *s_power_btn_label = NULL;
+static bool s_bluetooth_enabled = false;
 static device_view_bluetooth_toggle_cb_t s_toggle_cb = NULL;
 
-static void device_view_switch_event_cb(lv_event_t *event)
+static void device_view_power_button_event_cb(lv_event_t *event)
 {
-    if (lv_event_get_code(event) != LV_EVENT_VALUE_CHANGED || !s_toggle_cb) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || !s_toggle_cb) {
         return;
     }
 
-    lv_obj_t *sw = lv_event_get_target(event);
-    s_toggle_cb(lv_obj_has_state(sw, LV_STATE_CHECKED));
+    s_toggle_cb(!s_bluetooth_enabled);
 }
 
 static void device_view_set_common_label_style(lv_obj_t *label, const lv_font_t *font, lv_color_t color)
@@ -22,6 +23,19 @@ static void device_view_set_common_label_style(lv_obj_t *label, const lv_font_t 
     lv_obj_set_style_text_font(label, font, 0);
     lv_obj_set_style_text_color(label, color, 0);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+}
+
+static void device_view_style_power_button(bool enabled)
+{
+    if (!s_power_btn || !s_power_btn_label) {
+        return;
+    }
+
+    lv_obj_set_style_bg_color(s_power_btn,
+                              enabled ? lv_color_hex(0x20C36A) : lv_color_hex(APP_COMMON_ACCENT_COLOR),
+                              0);
+    lv_obj_set_style_bg_opa(s_power_btn, LV_OPA_COVER, 0);
+    lv_label_set_text(s_power_btn_label, enabled ? "Turn off" : "Turn on");
 }
 
 esp_err_t device_view_open(lv_obj_t *root, device_view_bluetooth_toggle_cb_t toggle_cb)
@@ -74,27 +88,21 @@ esp_err_t device_view_open(lv_obj_t *root, device_view_bluetooth_toggle_cb_t tog
     device_view_set_common_label_style(s_status_label, APP_COMMON_BODY_FONT, lv_color_hex(APP_COMMON_MUTED_TEXT_COLOR));
     lv_obj_center(s_status_label);
 
-    lv_obj_t *bluetooth_row = lv_obj_create(container);
-    lv_obj_remove_style_all(bluetooth_row);
-    lv_obj_set_width(bluetooth_row, LV_PCT(100));
-    lv_obj_set_height(bluetooth_row, 56);
-    lv_obj_set_style_bg_color(bluetooth_row, lv_color_hex(APP_COMMON_PANEL_COLOR), 0);
-    lv_obj_set_style_bg_opa(bluetooth_row, LV_OPA_70, 0);
-    lv_obj_set_style_radius(bluetooth_row, 18, 0);
-    lv_obj_set_style_pad_left(bluetooth_row, 16, 0);
-    lv_obj_set_style_pad_right(bluetooth_row, 16, 0);
-    lv_obj_set_flex_flow(bluetooth_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(bluetooth_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(bluetooth_row, LV_OBJ_FLAG_SCROLLABLE);
+    s_power_btn = lv_btn_create(container);
+    lv_obj_remove_style_all(s_power_btn);
+    lv_obj_set_width(s_power_btn, LV_PCT(100));
+    lv_obj_set_height(s_power_btn, 68);
+    lv_obj_set_style_radius(s_power_btn, 24, 0);
+    lv_obj_set_style_shadow_width(s_power_btn, 18, 0);
+    lv_obj_set_style_shadow_opa(s_power_btn, LV_OPA_30, 0);
+    lv_obj_set_style_shadow_color(s_power_btn, lv_color_hex(APP_COMMON_ACCENT_COLOR), 0);
+    lv_obj_add_flag(s_power_btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_power_btn, device_view_power_button_event_cb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t *bluetooth_label = lv_label_create(bluetooth_row);
-    lv_label_set_text(bluetooth_label, "Bluetooth");
-    lv_obj_set_style_text_font(bluetooth_label, APP_COMMON_BODY_FONT, 0);
-    lv_obj_set_style_text_color(bluetooth_label, lv_color_hex(APP_COMMON_TEXT_COLOR), 0);
-
-    s_switch = lv_switch_create(bluetooth_row);
-    lv_obj_set_style_bg_color(s_switch, lv_color_hex(APP_COMMON_ACCENT_COLOR), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_add_event_cb(s_switch, device_view_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    s_power_btn_label = lv_label_create(s_power_btn);
+    device_view_set_common_label_style(s_power_btn_label, APP_COMMON_BODY_FONT, lv_color_hex(0xFFFFFF));
+    lv_obj_center(s_power_btn_label);
+    device_view_style_power_button(false);
 
     return ESP_OK;
 }
@@ -103,21 +111,20 @@ void device_view_close(void)
 {
     s_root = NULL;
     s_status_label = NULL;
-    s_switch = NULL;
+    s_power_btn = NULL;
+    s_power_btn_label = NULL;
+    s_bluetooth_enabled = false;
     s_toggle_cb = NULL;
 }
 
 void device_view_set_status(const device_status_t *status)
 {
-    if (!status || !s_status_label || !s_switch) {
+    if (!status || !s_status_label || !s_power_btn) {
         return;
     }
 
-    if (status->bluetooth_enabled) {
-        lv_obj_add_state(s_switch, LV_STATE_CHECKED);
-    } else {
-        lv_obj_clear_state(s_switch, LV_STATE_CHECKED);
-    }
+    s_bluetooth_enabled = status->bluetooth_enabled;
+    device_view_style_power_button(s_bluetooth_enabled);
 
     switch (status->connection_state) {
     case DEVICE_CONNECTION_CONNECTED:
