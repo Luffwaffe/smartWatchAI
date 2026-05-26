@@ -555,7 +555,7 @@ static void bluetooth_manager_handle_ancs_data_source(const uint8_t *data, uint1
                            attr_len);
         if (pos + attr_len > len) {
             ESP_LOGW(TAG, "Truncated ANCS attribute uid=%lu attr=%u len=%u", (unsigned long)uid, attr_id, attr_len);
-            return;
+            attr_len = len > pos ? (uint16_t)(len - pos) : 0;
         }
 
         switch (attr_id) {

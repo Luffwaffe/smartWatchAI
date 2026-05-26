@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "app_common_config.h"
 #include "esp_log.h"
@@ -15,6 +16,7 @@
 #define NOTIFICATION_POPUP_MESSAGE_COLOR 0x4B5563
 #define NOTIFICATION_POPUP_ICON_BG_COLOR 0xE5EEF7
 #define NOTIFICATION_POPUP_TEXT_MAX_LEN 96
+#define NOTIFICATION_POPUP_MAX_WORDS 7
 
 static const char *TAG = "notification_popup";
 
@@ -103,6 +105,70 @@ static void notification_popup_sanitize_text(char *dst, size_t dst_size, const c
     }
 }
 
+static bool notification_popup_is_space(char c)
+{
+    return c == ' ' || c == '\n' || c == '\t' || c == '\r';
+}
+
+static void notification_popup_limit_words(char *dst, size_t dst_size, const char *src)
+{
+    if (!dst || dst_size == 0) {
+        return;
+    }
+    dst[0] = '\0';
+    if (!src) {
+        return;
+    }
+
+    const char *p = src;
+    size_t out = 0;
+    size_t words = 0;
+    bool truncated = false;
+
+    while (*p) {
+        while (notification_popup_is_space(*p)) {
+            p++;
+        }
+        if (!*p) {
+            break;
+        }
+        if (words == NOTIFICATION_POPUP_MAX_WORDS) {
+            truncated = true;
+            break;
+        }
+
+        const char *word_start = p;
+        while (*p && !notification_popup_is_space(*p)) {
+            p++;
+        }
+        size_t word_len = (size_t)(p - word_start);
+        size_t need = word_len + (words > 0 ? 1 : 0);
+        if (out + need >= dst_size) {
+            truncated = true;
+            break;
+        }
+
+        if (words > 0) {
+            dst[out++] = ' ';
+        }
+        memcpy(&dst[out], word_start, word_len);
+        out += word_len;
+        dst[out] = '\0';
+        words++;
+    }
+
+    if (truncated && dst_size > 4) {
+        size_t suffix_len = 3;
+        if (out + suffix_len >= dst_size) {
+            out = dst_size - suffix_len - 1;
+            while (out > 0 && notification_popup_is_utf8_continuation((unsigned char)dst[out])) {
+                out--;
+            }
+        }
+        memcpy(&dst[out], "...", suffix_len + 1);
+    }
+}
+
 static void notification_popup_auto_hide_cb(lv_timer_t *timer)
 {
     (void)timer;
@@ -177,12 +243,14 @@ void notification_popup_show(lv_obj_t *parent, const char *source_app_id, const 
     lv_obj_clear_flag(text_wrap, LV_OBJ_FLAG_SCROLLABLE);
 
     char safe_message[NOTIFICATION_POPUP_TEXT_MAX_LEN];
+    char display_message[NOTIFICATION_POPUP_TEXT_MAX_LEN];
     notification_popup_sanitize_text(safe_message, sizeof(safe_message), message);
+    notification_popup_limit_words(display_message, sizeof(display_message), safe_message);
 
     lv_obj_t *body = lv_label_create(text_wrap);
     lv_label_set_long_mode(body, LV_LABEL_LONG_DOT);
     lv_obj_set_width(body, LV_PCT(100));
-    lv_label_set_text(body, safe_message);
+    lv_label_set_text(body, display_message);
     lv_obj_set_style_text_font(body, APP_COMMON_BODY_FONT, 0);
     lv_obj_set_style_text_color(body, lv_color_hex(NOTIFICATION_POPUP_MESSAGE_COLOR), 0);
 

@@ -1,5 +1,5 @@
 set(APP_FONT_SRCS
-    "${CMAKE_CURRENT_LIST_DIR}/arial22.c"
     "${CMAKE_CURRENT_LIST_DIR}/arial20.c"
-    "${CMAKE_CURRENT_LIST_DIR}/RobotoRegular_32.c"
+    "${CMAKE_CURRENT_LIST_DIR}/arial22.c"
+    "${CMAKE_CURRENT_LIST_DIR}/arial32.c"
 )

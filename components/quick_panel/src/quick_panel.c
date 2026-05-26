@@ -9,6 +9,7 @@
 #define QUICK_PANEL_MAX_VISIBLE_ITEMS 6
 #define QUICK_PANEL_SOURCE_MAX_LEN 24
 #define QUICK_PANEL_MESSAGE_MAX_LEN 96
+#define QUICK_PANEL_MAX_MESSAGE_WORDS 7
 #define QUICK_PANEL_BG_COLOR 0x101820
 #define QUICK_PANEL_CARD_COLOR 0x1F2A33
 #define QUICK_PANEL_TEXT_COLOR 0xF4F7FA
@@ -49,12 +50,81 @@ static void quick_panel_copy_string(char *dst, size_t dst_size, const char *src)
     snprintf(dst, dst_size, "%s", src ? src : "");
 }
 
+static bool quick_panel_is_space(char c)
+{
+    return c == ' ' || c == '\n' || c == '\t' || c == '\r';
+}
+
+static bool quick_panel_is_utf8_continuation(unsigned char byte)
+{
+    return (byte & 0xC0) == 0x80;
+}
+
+static void quick_panel_copy_message_preview(char *dst, size_t dst_size, const char *src)
+{
+    if (!dst || dst_size == 0) {
+        return;
+    }
+    dst[0] = '\0';
+    if (!src) {
+        return;
+    }
+
+    const char *p = src;
+    size_t out = 0;
+    size_t words = 0;
+    bool truncated = false;
+
+    while (*p) {
+        while (quick_panel_is_space(*p)) {
+            p++;
+        }
+        if (!*p) {
+            break;
+        }
+        if (words == QUICK_PANEL_MAX_MESSAGE_WORDS) {
+            truncated = true;
+            break;
+        }
+
+        const char *word_start = p;
+        while (*p && !quick_panel_is_space(*p)) {
+            p++;
+        }
+        size_t word_len = (size_t)(p - word_start);
+        size_t need = word_len + (words > 0 ? 1 : 0);
+        if (out + need >= dst_size) {
+            truncated = true;
+            break;
+        }
+
+        if (words > 0) {
+            dst[out++] = ' ';
+        }
+        memcpy(&dst[out], word_start, word_len);
+        out += word_len;
+        dst[out] = '\0';
+        words++;
+    }
+
+    if (truncated && dst_size > 4) {
+        size_t suffix_len = 3;
+        if (out + suffix_len >= dst_size) {
+            out = dst_size - suffix_len - 1;
+            while (out > 0 && quick_panel_is_utf8_continuation((unsigned char)dst[out])) {
+                out--;
+            }
+        }
+        memcpy(&dst[out], "...", suffix_len + 1);
+    }
+}
+
 static void quick_panel_upsert_item(const char *source_app_id, const char *message, const void *icon)
 {
     const char *source = (source_app_id && source_app_id[0]) ? source_app_id : "unknown";
     for (size_t i = 0; i < s_item_count; ++i) {
         if (strcmp(s_items[i].source_app_id, source) == 0) {
-            quick_panel_copy_string(s_items[i].message, sizeof(s_items[i].message), message);
+            quick_panel_copy_message_preview(s_items[i].message, sizeof(s_items[i].message), message);
             s_items[i].icon = icon;
             return;
         }
@@ -69,7 +139,7 @@ static void quick_panel_upsert_item(const char *source_app_id, const char *messa
     memset(slot, 0, sizeof(*slot));
     slot->used = true;
     quick_panel_copy_string(slot->source_app_id, sizeof(slot->source_app_id), source);
-    quick_panel_copy_string(slot->message, sizeof(slot->message), message);
+    quick_panel_copy_message_preview(slot->message, sizeof(slot->message), message);
     slot->icon = icon;
 }
 
