@@ -1,5 +1,7 @@
 #include "launcherView.h"
 
+#include "app_common_config.h"
+
 extern const lv_image_dsc_t quick_panel_background4;
 
 #define LAUNCHER_VIEW_COLS 3
@@ -11,7 +13,7 @@ extern const lv_image_dsc_t quick_panel_background4;
 #define LAUNCHER_VIEW_GRID_PAD_X 16
 #define LAUNCHER_VIEW_GRID_COL_GAP 8
 #define LAUNCHER_VIEW_GRID_ROW_GAP 12
-#define LAUNCHER_VIEW_APP_NAME_FONT (&lv_font_montserrat_18)
+#define LAUNCHER_VIEW_APP_NAME_FONT APP_COMMON_BODY_FONT
 #define LAUNCHER_VIEW_APP_NAME_TOP_PAD 3
 #define LAUNCHER_VIEW_APP_NAME_COLOR 0x000000
 

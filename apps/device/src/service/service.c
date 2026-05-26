@@ -12,6 +12,14 @@ static device_status_t s_status = {
     .connection_state = DEVICE_CONNECTION_BLUETOOTH_OFF,
 };
 
+typedef enum {
+    DEVICE_SERVICE_SUB_BLUETOOTH_STATUS,
+    DEVICE_SERVICE_SUB_PHONE_MESSAGE,
+} device_service_subscription_t;
+
+static const device_service_subscription_t s_bt_status_subscription = DEVICE_SERVICE_SUB_BLUETOOTH_STATUS;
+static const device_service_subscription_t s_phone_message_subscription = DEVICE_SERVICE_SUB_PHONE_MESSAGE;
+
 static void device_service_request_ui_refresh(void)
 {
     QueueHandle_t queue = app_manager_get_event_queue();
@@ -68,6 +76,15 @@ static void device_service_handle_data_event(const data_center_event_t *event, v
         device_service_apply_bluetooth_status(&bt_status);
         device_service_request_ui_refresh();
         break;
+    case DATA_CENTER_EVENT_PHONE_MESSAGE: {
+        size_t copy_len = event->payload_len < sizeof(s_status.phone_message) - 1
+                              ? event->payload_len
+                              : sizeof(s_status.phone_message) - 1;
+        memcpy(s_status.phone_message, event->payload, copy_len);
+        s_status.phone_message[copy_len] = '\0';
+        device_service_request_ui_refresh();
+        break;
+    }
     default:
         break;
     }
@@ -98,18 +115,26 @@ static void device_service_refresh_connection_state(void)
 
 esp_err_t device_service_start(void)
 {
-    data_center_filter_t filter = {0};
-    snprintf(filter.owner, sizeof(filter.owner), "%s", "device");
-    snprintf(filter.topic, sizeof(filter.topic), "%s", "bluetooth.status");
-    filter.type = DATA_CENTER_EVENT_BLUETOOTH_STATUS_CHANGED;
-    data_center_subscribe_event(&filter, device_service_handle_data_event, NULL);
+    data_center_filter_t bt_filter = {0};
+    snprintf(bt_filter.owner, sizeof(bt_filter.owner), "%s", "device");
+    snprintf(bt_filter.topic, sizeof(bt_filter.topic), "%s", "bluetooth.status");
+    bt_filter.type = DATA_CENTER_EVENT_BLUETOOTH_STATUS_CHANGED;
+    data_center_subscribe_event(&bt_filter, device_service_handle_data_event, (void *)&s_bt_status_subscription);
+
+    data_center_filter_t phone_filter = {0};
+    snprintf(phone_filter.owner, sizeof(phone_filter.owner), "%s", "device");
+    snprintf(phone_filter.topic, sizeof(phone_filter.topic), "%s", "phone.notification");
+    phone_filter.type = DATA_CENTER_EVENT_PHONE_MESSAGE;
+    data_center_subscribe_event(&phone_filter, device_service_handle_data_event, (void *)&s_phone_message_subscription);
+
     device_service_refresh_connection_state();
     return ESP_OK;
 }
 
 esp_err_t device_service_stop(void)
 {
-    data_center_unsubscribe_event(device_service_handle_data_event, NULL);
+    data_center_unsubscribe_event(device_service_handle_data_event, (void *)&s_bt_status_subscription);
+    data_center_unsubscribe_event(device_service_handle_data_event, (void *)&s_phone_message_subscription);
     return ESP_OK;
 }
 

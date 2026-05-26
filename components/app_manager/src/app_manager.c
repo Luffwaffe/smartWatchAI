@@ -7,9 +7,12 @@
 #include "app_manager.h"
 #include "app_gesture.h"
 #include "launcherView.h"
+#include "notification_popup.h"
 #include "quick_panel.h"
+#include "data_center.h"
 #include "esp_log.h"
 #include "bsp/esp-bsp.h"
+#include <stdio.h>
 #include <string.h>
 
 static const char *TAG = "app_manager";
@@ -34,6 +37,10 @@ static const app_t *s_current_app = NULL;
 static lv_obj_t *s_launcher_root = NULL;
 static app_manager_state_t s_state = APP_MANAGER_STATE_LAUNCHER;
 static bool s_opening_app = false;
+
+static const app_t *find_app_by_id(const char *id);
+static const void *app_manager_find_app_icon(const char *app_id);
+static void app_manager_data_center_event_cb(const data_center_event_t *event, void *user_ctx);
 
 static void launcher_icon_cb(lv_event_t *e)
 {
@@ -149,6 +156,15 @@ esp_err_t app_manager_init(void)
         .show_quick_panel = app_manager_gesture_show_quick_panel,
     });
 
+    esp_err_t sub_ret = data_center_subscribe_event(&(data_center_filter_t){
+        .owner = "app_manager",
+        .target = DATA_CENTER_TARGET_BROADCAST,
+        .type = DATA_CENTER_EVENT_TYPE_ANY,
+    }, app_manager_data_center_event_cb, NULL);
+    if (sub_ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to subscribe data_center events: %s", esp_err_to_name(sub_ret));
+    }
+
     ESP_LOGI(TAG, "app_manager initialized");
     return ESP_OK;
 }
@@ -159,12 +175,53 @@ static void app_manager_task(void *arg)
     for (;;) {
         /* Process app events only; BSP's LVGL port owns lv_timer_handler(). */
         while (xQueueReceive(s_ui_queue, &ev, 0) == pdTRUE) {
-            if (s_current_app && s_current_app->event_handler) {
+            switch (ev.type) {
+            case APP_EVT_QUICK_PANEL_MESSAGE:
                 bsp_display_lock(0);
-                s_current_app->event_handler(&ev);
+                quick_panel_update_message(ev.source_app_id, ev.message, app_manager_find_app_icon(ev.source_app_id));
+                if (quick_panel_is_visible()) {
+                    quick_panel_show(lv_scr_act());
+                    lv_obj_t *quick_panel_root = quick_panel_get_root();
+                    if (quick_panel_root) {
+                        app_gesture_attach(quick_panel_root);
+                    }
+                }
                 bsp_display_unlock();
-            } else {
-                if (ev.type == APP_EVT_APP_FINISHED) app_manager_back_to_launcher();
+                break;
+
+            case APP_EVT_PHONE_MESSAGE: {
+                bsp_display_lock(0);
+                const void *phone_app_icon = app_manager_find_app_icon(ev.source_app_id);
+                quick_panel_update_message(ev.source_app_id, ev.message, phone_app_icon);
+                notification_popup_show(lv_scr_act(), ev.source_app_id, ev.message, phone_app_icon);
+                if (quick_panel_is_visible()) {
+                    quick_panel_show(lv_scr_act());
+                    lv_obj_t *quick_panel_root = quick_panel_get_root();
+                    if (quick_panel_root) {
+                        app_gesture_attach(quick_panel_root);
+                    }
+                }
+                bsp_display_unlock();
+                break;
+            }
+
+            case APP_EVT_APP_FINISHED:
+                if (s_current_app && s_current_app->event_handler) {
+                    bsp_display_lock(0);
+                    s_current_app->event_handler(&ev);
+                    bsp_display_unlock();
+                } else {
+                    app_manager_back_to_launcher();
+                }
+                break;
+
+            default:
+                if (s_current_app && s_current_app->event_handler) {
+                    bsp_display_lock(0);
+                    s_current_app->event_handler(&ev);
+                    bsp_display_unlock();
+                }
+                break;
             }
         }
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -178,6 +235,61 @@ esp_err_t app_manager_register_app(const app_t *app)
     s_registry[s_reg_count++] = app;
     ESP_LOGI(TAG, "Registered app %s (%s)", app->id, app->name ? app->name : "");
     return ESP_OK;
+}
+
+static const void *app_manager_find_app_icon(const char *app_id)
+{
+    const app_t *app = app_id ? find_app_by_id(app_id) : NULL;
+    return app ? app->icon : NULL;
+}
+
+static void app_manager_copy_event_string(char *dst, size_t dst_size, const char *src)
+{
+    if (!dst || dst_size == 0) {
+        return;
+    }
+    snprintf(dst, dst_size, "%s", src ? src : "");
+}
+
+static bool app_manager_should_show_quick_panel_event(const data_center_event_t *event)
+{
+    if (!event) {
+        return false;
+    }
+
+    return event->type == DATA_CENTER_EVENT_GENERIC ||
+           event->type == DATA_CENTER_EVENT_PHONE_MESSAGE ||
+           event->type == DATA_CENTER_EVENT_AI_TEXT;
+}
+
+static app_event_type_t app_manager_event_type_from_data_center(const data_center_event_t *event)
+{
+    return event && event->type == DATA_CENTER_EVENT_PHONE_MESSAGE
+               ? APP_EVT_PHONE_MESSAGE
+               : APP_EVT_QUICK_PANEL_MESSAGE;
+}
+
+static void app_manager_data_center_event_cb(const data_center_event_t *event, void *user_ctx)
+{
+    ESP_LOGI(TAG, " app_manager_data_center_event_cb");
+    (void)user_ctx;
+    if (!s_ui_queue || !app_manager_should_show_quick_panel_event(event)) {
+        return;
+    }
+    ESP_LOGI(TAG, " Initialization Complete");
+    app_event_t ev = {
+        .type = app_manager_event_type_from_data_center(event),
+    };
+    app_manager_copy_event_string(ev.source_app_id, sizeof(ev.source_app_id), event->source);
+    size_t copy_len = event->payload_len < sizeof(ev.message) - 1 ? event->payload_len : sizeof(ev.message) - 1;
+    memcpy(ev.message, event->payload, copy_len);
+    ev.message[copy_len] = '\0';
+
+    if (ev.message[0] == '\0') {
+        return;
+    }
+
+    xQueueSend(s_ui_queue, &ev, 0);
 }
 
 QueueHandle_t app_manager_get_event_queue(void)

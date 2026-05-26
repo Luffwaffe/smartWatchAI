@@ -14,6 +14,7 @@ typedef struct {
     device_connection_state_t connection_state;
     char phone_name[32];
     char phone_address[32];
+    char phone_message[96];
 } device_status_t;
 
 esp_err_t device_service_start(void);

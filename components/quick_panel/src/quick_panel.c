@@ -1,15 +1,16 @@
 #include "quick_panel.h"
 
-#include "data_center.h"
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
+
+#include "app_common_config.h"
 
 #define QUICK_PANEL_MAX_VISIBLE_ITEMS 6
+#define QUICK_PANEL_SOURCE_MAX_LEN 24
+#define QUICK_PANEL_MESSAGE_MAX_LEN 96
 #define QUICK_PANEL_BG_COLOR 0x101820
 #define QUICK_PANEL_CARD_COLOR 0x1F2A33
-#define QUICK_PANEL_CARD_ACCENT_INFO 0x39D98A
-#define QUICK_PANEL_CARD_ACCENT_WARNING 0xFFB020
-#define QUICK_PANEL_CARD_ACCENT_ACTION 0x4D96FF
 #define QUICK_PANEL_TEXT_COLOR 0xF4F7FA
 #define QUICK_PANEL_MUTED_TEXT_COLOR 0xA7B3BD
 #define QUICK_PANEL_SOURCE_TEXT_COLOR 0x7FD7FF
@@ -17,32 +18,17 @@
 extern const lv_image_dsc_t quick_panel_background4;
 
 static lv_obj_t *s_panel = NULL;
+static lv_obj_t *s_parent = NULL;
 
-static const char *quick_panel_item_type_text(data_center_item_type_t type)
-{
-    switch (type) {
-    case DATA_CENTER_ITEM_WARNING:
-        return "warning";
-    case DATA_CENTER_ITEM_ACTION:
-        return "action";
-    case DATA_CENTER_ITEM_INFO:
-    default:
-        return "info";
-    }
-}
+typedef struct {
+    bool used;
+    char source_app_id[QUICK_PANEL_SOURCE_MAX_LEN];
+    char message[QUICK_PANEL_MESSAGE_MAX_LEN];
+    const void *icon;
+} quick_panel_item_t;
 
-static lv_color_t quick_panel_item_accent_color(data_center_item_type_t type)
-{
-    switch (type) {
-    case DATA_CENTER_ITEM_WARNING:
-        return lv_color_hex(QUICK_PANEL_CARD_ACCENT_WARNING);
-    case DATA_CENTER_ITEM_ACTION:
-        return lv_color_hex(QUICK_PANEL_CARD_ACCENT_ACTION);
-    case DATA_CENTER_ITEM_INFO:
-    default:
-        return lv_color_hex(QUICK_PANEL_CARD_ACCENT_INFO);
-    }
-}
+static quick_panel_item_t s_items[QUICK_PANEL_MAX_VISIBLE_ITEMS];
+static size_t s_item_count = 0;
 
 static lv_obj_t *quick_panel_create_label(lv_obj_t *parent, const char *text, const lv_font_t *font, lv_color_t color)
 {
@@ -55,7 +41,39 @@ static lv_obj_t *quick_panel_create_label(lv_obj_t *parent, const char *text, co
     return label;
 }
 
-static void quick_panel_add_item_card(lv_obj_t *list, const data_center_item_t *item)
+static void quick_panel_copy_string(char *dst, size_t dst_size, const char *src)
+{
+    if (!dst || dst_size == 0) {
+        return;
+    }
+    snprintf(dst, dst_size, "%s", src ? src : "");
+}
+
+static void quick_panel_upsert_item(const char *source_app_id, const char *message, const void *icon)
+{
+    const char *source = (source_app_id && source_app_id[0]) ? source_app_id : "unknown";
+    for (size_t i = 0; i < s_item_count; ++i) {
+        if (strcmp(s_items[i].source_app_id, source) == 0) {
+            quick_panel_copy_string(s_items[i].message, sizeof(s_items[i].message), message);
+            s_items[i].icon = icon;
+            return;
+        }
+    }
+
+    if (s_item_count == QUICK_PANEL_MAX_VISIBLE_ITEMS) {
+        memmove(&s_items[0], &s_items[1], sizeof(s_items[0]) * (QUICK_PANEL_MAX_VISIBLE_ITEMS - 1));
+        s_item_count--;
+    }
+
+    quick_panel_item_t *slot = &s_items[s_item_count++];
+    memset(slot, 0, sizeof(*slot));
+    slot->used = true;
+    quick_panel_copy_string(slot->source_app_id, sizeof(slot->source_app_id), source);
+    quick_panel_copy_string(slot->message, sizeof(slot->message), message);
+    slot->icon = icon;
+}
+
+static void quick_panel_add_item_card(lv_obj_t *list, const quick_panel_item_t *item)
 {
     lv_obj_t *card = lv_obj_create(list);
     lv_obj_remove_style_all(card);
@@ -65,29 +83,27 @@ static void quick_panel_add_item_card(lv_obj_t *list, const data_center_item_t *
     lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(card, 20, 0);
     lv_obj_set_style_pad_all(card, 12, 0);
-    lv_obj_set_style_pad_row(card, 4, 0);
-    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_column(card, 12, 0);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *meta = lv_obj_create(card);
-    lv_obj_remove_style_all(meta);
-    lv_obj_set_width(meta, LV_PCT(100));
-    lv_obj_set_height(meta, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(meta, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(meta, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(meta, LV_OBJ_FLAG_SCROLLABLE);
+    if (item->icon) {
+        lv_obj_t *icon = lv_img_create(card);
+        lv_img_set_src(icon, item->icon);
+        lv_obj_set_size(icon, 44, 44);
+    }
 
-    char source_text[64];
-    snprintf(source_text, sizeof(source_text), "module: %s", item->source_app_id[0] ? item->source_app_id : "unknown");
-    quick_panel_create_label(meta, source_text, &lv_font_montserrat_14, lv_color_hex(QUICK_PANEL_SOURCE_TEXT_COLOR));
+    lv_obj_t *text_wrap = lv_obj_create(card);
+    lv_obj_remove_style_all(text_wrap);
+    lv_obj_set_width(text_wrap, item->icon ? LV_PCT(78) : LV_PCT(100));
+    lv_obj_set_height(text_wrap, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_row(text_wrap, 4, 0);
+    lv_obj_set_flex_flow(text_wrap, LV_FLEX_FLOW_COLUMN);
+    lv_obj_clear_flag(text_wrap, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *badge = lv_label_create(meta);
-    lv_label_set_text(badge, quick_panel_item_type_text(item->type));
-    lv_obj_set_style_text_color(badge, quick_panel_item_accent_color(item->type), 0);
-    lv_obj_set_style_text_font(badge, &lv_font_montserrat_14, 0);
-
-    quick_panel_create_label(card, item->title, &lv_font_montserrat_20, lv_color_hex(QUICK_PANEL_TEXT_COLOR));
-    quick_panel_create_label(card, item->message, &lv_font_montserrat_20, lv_color_hex(QUICK_PANEL_MUTED_TEXT_COLOR));
+    quick_panel_create_label(text_wrap, item->source_app_id, APP_COMMON_TITLE_FONT, lv_color_hex(QUICK_PANEL_SOURCE_TEXT_COLOR));
+    quick_panel_create_label(text_wrap, item->message, APP_COMMON_BODY_FONT, lv_color_hex(QUICK_PANEL_TEXT_COLOR));
 }
 
 static void quick_panel_add_empty_state(lv_obj_t *list)
@@ -104,8 +120,8 @@ static void quick_panel_add_empty_state(lv_obj_t *list)
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
     lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
 
-    quick_panel_create_label(card, "No live modules", &lv_font_montserrat_20, lv_color_hex(QUICK_PANEL_TEXT_COLOR));
-    quick_panel_create_label(card, "Waiting for data_center publishers", &lv_font_montserrat_16, lv_color_hex(QUICK_PANEL_MUTED_TEXT_COLOR));
+    quick_panel_create_label(card, "No requested items", APP_COMMON_TITLE_FONT, lv_color_hex(QUICK_PANEL_TEXT_COLOR));
+    quick_panel_create_label(card, "Publish a data_center message to show an item", APP_COMMON_BODY_FONT, lv_color_hex(QUICK_PANEL_MUTED_TEXT_COLOR));
 }
 
 esp_err_t quick_panel_show(lv_obj_t *parent)
@@ -114,6 +130,7 @@ esp_err_t quick_panel_show(lv_obj_t *parent)
         return ESP_ERR_INVALID_ARG;
     }
 
+    s_parent = parent;
     quick_panel_hide();
 
     s_panel = lv_obj_create(parent);
@@ -156,17 +173,32 @@ esp_err_t quick_panel_show(lv_obj_t *parent)
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
 
-    data_center_item_t items[QUICK_PANEL_MAX_VISIBLE_ITEMS];
-    size_t item_count = data_center_get_snapshot(items, QUICK_PANEL_MAX_VISIBLE_ITEMS);
-    if (item_count == 0) {
+    if (s_item_count == 0) {
         quick_panel_add_empty_state(list);
     } else {
-        for (size_t i = 0; i < item_count; ++i) {
-            quick_panel_add_item_card(list, &items[i]);
+        for (size_t i = 0; i < s_item_count; ++i) {
+            quick_panel_add_item_card(list, &s_items[i]);
         }
     }
 
     lv_obj_move_foreground(s_panel);
+    return ESP_OK;
+}
+
+esp_err_t quick_panel_show_message(lv_obj_t *parent, const char *source_app_id, const char *message, const void *icon)
+{
+    if (!parent && !s_parent) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    lv_obj_t *target_parent = parent ? parent : s_parent;
+    quick_panel_upsert_item(source_app_id, message, icon);
+    return quick_panel_show(target_parent);
+}
+
+esp_err_t quick_panel_update_message(const char *source_app_id, const char *message, const void *icon)
+{
+    quick_panel_upsert_item(source_app_id, message, icon);
     return ESP_OK;
 }
 

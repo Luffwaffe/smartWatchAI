@@ -435,7 +435,7 @@ static void bluetooth_manager_publish_ancs_notification(const bluetooth_manager_
 
     data_center_message_t data_message = {0};
     bluetooth_manager_copy_string(data_message.source, sizeof(data_message.source), "ancs");
-    bluetooth_manager_copy_string(data_message.target, sizeof(data_message.target), "device");
+    bluetooth_manager_copy_string(data_message.target, sizeof(data_message.target), DATA_CENTER_TARGET_BROADCAST);
     data_message.kind = DATA_CENTER_MESSAGE_KIND_NOTIFICATION;
     data_message.payload_len = (size_t)written < sizeof(data_message.payload) ? (size_t)written : sizeof(data_message.payload) - 1;
     memcpy(data_message.payload, payload, data_message.payload_len);
@@ -1191,7 +1191,7 @@ static esp_err_t bluetooth_manager_backend_init(void)
     ble_hs_cfg.store_delete_cb = ble_store_config_delete;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
 
-    ble_svc_gap_device_name_set("AIWatch");
+    ble_svc_gap_device_name_set("Navy AIWatch");
     ble_svc_gatt_init();
     ble_hs_cfg.sync_cb = bluetooth_manager_on_sync;
     ble_hs_cfg.sm_io_cap = BLE_HS_IO_NO_INPUT_OUTPUT;

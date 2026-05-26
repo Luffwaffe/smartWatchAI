@@ -2,6 +2,9 @@
 
 #include "lvgl.h"
 
+LV_FONT_DECLARE(arial22);
+LV_FONT_DECLARE(RobotoRegular_32);
+
 #define APP_COMMON_BACKGROUND_COLOR 0xFAFAFA
 #define APP_COMMON_PANEL_COLOR 0x132637
 #define APP_COMMON_PANEL_BORDER_COLOR 0x24445C
@@ -9,8 +12,8 @@
 #define APP_COMMON_MUTED_TEXT_COLOR 0x93A8B8
 #define APP_COMMON_ACCENT_COLOR 0x33D6A6
 
-#define APP_COMMON_TITLE_FONT (&lv_font_montserrat_32)
-#define APP_COMMON_BODY_FONT (&lv_font_montserrat_24)
+#define APP_COMMON_TITLE_FONT (&RobotoRegular_32)
+#define APP_COMMON_BODY_FONT (&arial22)
 
 #define APP_COMMON_TITLE_PAD_TOP 60
 #define APP_COMMON_TITLE_PAD_BOTTOM 12

@@ -18,11 +18,15 @@ typedef enum {
     APP_EVT_NAV_RIGHT = 6,
     APP_EVT_CLOCK_DATETIME_UPDATE = 7,
     APP_EVT_BLUETOOTH_STATUS_CHANGED = 8,
+    APP_EVT_QUICK_PANEL_MESSAGE = 9,
+    APP_EVT_PHONE_MESSAGE = 10,
 } app_event_type_t;
 
 typedef struct {
     app_event_type_t type;
     int value;
+    char source_app_id[24];
+    char message[96];
 } app_event_t;
 
 typedef struct app {
