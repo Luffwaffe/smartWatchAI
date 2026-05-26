@@ -440,7 +440,7 @@ static void bluetooth_manager_publish_ancs_notification(const bluetooth_manager_
     }
 
     data_center_message_t data_message = {0};
-    bluetooth_manager_copy_string(data_message.source, sizeof(data_message.source), "ancs");
+    bluetooth_manager_copy_string(data_message.source, sizeof(data_message.source), notification->app_id[0] ? notification->app_id : "ancs");
     bluetooth_manager_copy_string(data_message.target, sizeof(data_message.target), DATA_CENTER_TARGET_BROADCAST);
     data_message.kind = DATA_CENTER_MESSAGE_KIND_NOTIFICATION;
     data_message.payload_len = (size_t)written < sizeof(data_message.payload) ? (size_t)written : sizeof(data_message.payload) - 1;

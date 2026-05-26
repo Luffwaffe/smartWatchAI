@@ -14,14 +14,45 @@
 #define NOTIFICATION_POPUP_BG_COLOR 0xF8FAFC
 #define NOTIFICATION_POPUP_TITLE_COLOR 0x111827
 #define NOTIFICATION_POPUP_MESSAGE_COLOR 0x4B5563
-#define NOTIFICATION_POPUP_ICON_BG_COLOR 0xE5EEF7
+#define NOTIFICATION_POPUP_ICON_BG_COLOR 0xFAFAFA
 #define NOTIFICATION_POPUP_TEXT_MAX_LEN 96
 #define NOTIFICATION_POPUP_MAX_WORDS 10
 
 static const char *TAG = "notification_popup";
 
+extern const lv_image_dsc_t messenger_icon;
+
 static lv_obj_t *s_popup = NULL;
 static lv_timer_t *s_auto_hide_timer = NULL;
+
+typedef struct {
+    const char *source_app_id;
+    const void *icon;
+} notification_popup_icon_map_t;
+
+static const notification_popup_icon_map_t s_phone_app_icon_map[] = {
+    { "com.facebook.Messenger", &messenger_icon },
+    { "com.microsoft.skype.teams", NULL },
+    { "com.vng.zalo", NULL },
+    { "com.facebook.Facebook", NULL },
+    { "com.apple.MobileSMS", NULL },
+    { "com.apple.mobilephone", NULL },
+};
+
+static const void *notification_popup_find_phone_app_icon(const char *source_app_id)
+{
+    if (!source_app_id || !source_app_id[0]) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < sizeof(s_phone_app_icon_map) / sizeof(s_phone_app_icon_map[0]); ++i) {
+        if (strcmp(source_app_id, s_phone_app_icon_map[i].source_app_id) == 0) {
+            return s_phone_app_icon_map[i].icon;
+        }
+    }
+
+    return NULL;
+}
 
 static bool notification_popup_is_utf8_continuation(unsigned char byte)
 {
@@ -195,6 +226,10 @@ void notification_popup_show(lv_obj_t *parent, const char *source_app_id, const 
     }
 
     notification_popup_hide();
+    const void *display_icon = notification_popup_find_phone_app_icon(source_app_id);
+    if (!display_icon) {
+        display_icon = icon;
+    }
 
     s_popup = lv_obj_create(parent);
     lv_obj_remove_style_all(s_popup);
@@ -218,11 +253,13 @@ void notification_popup_show(lv_obj_t *parent, const char *source_app_id, const 
     lv_obj_set_style_bg_color(icon_box, lv_color_hex(NOTIFICATION_POPUP_ICON_BG_COLOR), 0);
     lv_obj_set_style_bg_opa(icon_box, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(icon_box, 16, 0);
+    lv_obj_set_style_border_width(icon_box,2,0);
+    lv_obj_set_style_border_color(icon_box,lv_color_hex(NOTIFICATION_POPUP_BG_COLOR),0);
     lv_obj_clear_flag(icon_box, LV_OBJ_FLAG_SCROLLABLE);
 
-    if (icon) {
+    if (display_icon) {
         lv_obj_t *icon_img = lv_img_create(icon_box);
-        lv_img_set_src(icon_img, icon);
+        lv_img_set_src(icon_img, display_icon);
         lv_obj_center(icon_img);
     } else {
         lv_obj_t *placeholder = lv_label_create(icon_box);

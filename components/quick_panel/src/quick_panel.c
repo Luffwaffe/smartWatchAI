@@ -208,7 +208,7 @@ esp_err_t quick_panel_show(lv_obj_t *parent)
     lv_obj_set_size(s_panel, LV_PCT(100), LV_PCT(100));
     lv_obj_align(s_panel, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_flag(s_panel, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(s_panel, lv_color_hex(QUICK_PANEL_BG_COLOR), 0);
     lv_obj_set_style_bg_opa(s_panel, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_grad_color(s_panel, lv_color_hex(0xFA1111), 0);
