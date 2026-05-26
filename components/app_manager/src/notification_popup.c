@@ -21,6 +21,10 @@
 static const char *TAG = "notification_popup";
 
 extern const lv_image_dsc_t messenger_icon;
+extern const lv_image_dsc_t call_icon;
+extern const lv_image_dsc_t zalo_icon;
+extern const lv_image_dsc_t team_icon;
+extern const lv_image_dsc_t message_icon;
 
 static lv_obj_t *s_popup = NULL;
 static lv_timer_t *s_auto_hide_timer = NULL;
@@ -32,11 +36,11 @@ typedef struct {
 
 static const notification_popup_icon_map_t s_phone_app_icon_map[] = {
     { "com.facebook.Messenger", &messenger_icon },
-    { "com.microsoft.skype.teams", NULL },
-    { "com.vng.zalo", NULL },
+    { "com.microsoft.skype.teams", &team_icon },
+    { "vn.com.vng.zingalo", &zalo_icon },
     { "com.facebook.Facebook", NULL },
-    { "com.apple.MobileSMS", NULL },
-    { "com.apple.mobilephone", NULL },
+    { "com.apple.MobileSMS", &message_icon },
+    { "com.apple.mobilephone", &call_icon },
 };
 
 static const void *notification_popup_find_phone_app_icon(const char *source_app_id)
@@ -47,10 +51,12 @@ static const void *notification_popup_find_phone_app_icon(const char *source_app
 
     for (size_t i = 0; i < sizeof(s_phone_app_icon_map) / sizeof(s_phone_app_icon_map[0]); ++i) {
         if (strcmp(source_app_id, s_phone_app_icon_map[i].source_app_id) == 0) {
+            ESP_LOGI(TAG, "Matched notification icon: source='%s' icon=%p", source_app_id, s_phone_app_icon_map[i].icon);
             return s_phone_app_icon_map[i].icon;
         }
     }
 
+    ESP_LOGW(TAG, "No notification icon mapping for source='%s'", source_app_id);
     return NULL;
 }
 
@@ -226,10 +232,17 @@ void notification_popup_show(lv_obj_t *parent, const char *source_app_id, const 
     }
 
     notification_popup_hide();
-    const void *display_icon = notification_popup_find_phone_app_icon(source_app_id);
+    const void *mapped_icon = notification_popup_find_phone_app_icon(source_app_id);
+    const void *display_icon = mapped_icon;
     if (!display_icon) {
         display_icon = icon;
     }
+    ESP_LOGI(TAG, "Show notification popup: source='%s' mapped_icon=%p fallback_icon=%p display_icon=%p team_icon=%p",
+             source_app_id ? source_app_id : "NULL",
+             mapped_icon,
+             icon,
+             display_icon,
+             &team_icon);
 
     s_popup = lv_obj_create(parent);
     lv_obj_remove_style_all(s_popup);
