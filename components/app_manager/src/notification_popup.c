@@ -16,7 +16,7 @@
 #define NOTIFICATION_POPUP_MESSAGE_COLOR 0x4B5563
 #define NOTIFICATION_POPUP_ICON_BG_COLOR 0xE5EEF7
 #define NOTIFICATION_POPUP_TEXT_MAX_LEN 96
-#define NOTIFICATION_POPUP_MAX_WORDS 7
+#define NOTIFICATION_POPUP_MAX_WORDS 10
 
 static const char *TAG = "notification_popup";
 
@@ -203,9 +203,9 @@ void notification_popup_show(lv_obj_t *parent, const char *source_app_id, const 
     lv_obj_clear_flag(s_popup, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(s_popup, lv_color_hex(NOTIFICATION_POPUP_BG_COLOR), 0);
     lv_obj_set_style_bg_opa(s_popup, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(s_popup, 35, 0);
-    lv_obj_set_style_pad_all(s_popup, 12, 0);
-    lv_obj_set_style_pad_column(s_popup, 12, 0);
+    lv_obj_set_style_radius(s_popup, 26, 0);
+    lv_obj_set_style_pad_all(s_popup, 8, 0);
+    lv_obj_set_style_pad_column(s_popup, 10, 0);
     lv_obj_set_style_shadow_width(s_popup, 18, 0);
     lv_obj_set_style_shadow_opa(s_popup, LV_OPA_30, 0);
     lv_obj_set_style_shadow_color(s_popup, lv_color_hex(0x000000), 0);
@@ -236,7 +236,7 @@ void notification_popup_show(lv_obj_t *parent, const char *source_app_id, const 
 
     lv_obj_t *text_wrap = lv_obj_create(s_popup);
     lv_obj_remove_style_all(text_wrap);
-    lv_obj_set_width(text_wrap, LV_PCT(78));
+    lv_obj_set_width(text_wrap, LV_PCT(90));
     lv_obj_set_height(text_wrap, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_row(text_wrap, 4, 0);
     lv_obj_set_flex_flow(text_wrap, LV_FLEX_FLOW_COLUMN);
@@ -249,7 +249,7 @@ void notification_popup_show(lv_obj_t *parent, const char *source_app_id, const 
 
     lv_obj_t *body = lv_label_create(text_wrap);
     lv_label_set_long_mode(body, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(body, LV_PCT(100));
+    lv_obj_set_width(body, LV_PCT(90));
     lv_label_set_text(body, display_message);
     lv_obj_set_style_text_font(body, APP_COMMON_BODY_FONT, 0);
     lv_obj_set_style_text_color(body, lv_color_hex(NOTIFICATION_POPUP_MESSAGE_COLOR), 0);

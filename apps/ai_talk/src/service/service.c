@@ -11,7 +11,7 @@ static void ai_talk_service_task(void *arg)
 {
     ai_talk_context_t *context = ai_talk_context_get();
     QueueHandle_t queue = app_manager_get_event_queue();
-
+while(1){
     for (int count = AI_TALK_COUNT_START_VALUE; count <= AI_TALK_COUNT_END_VALUE && !context->stop_requested; ++count) {
         app_event_t event = {
             .type = APP_EVT_COUNTDOWN_UPDATE,
@@ -21,7 +21,6 @@ static void ai_talk_service_task(void *arg)
         xQueueSend(queue, &event, 0);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
-
     app_event_t finished_event = {
         .type = APP_EVT_APP_FINISHED,
         .value = 0,
@@ -30,6 +29,7 @@ static void ai_talk_service_task(void *arg)
 
     context->task = NULL;
     vTaskDelete(NULL);
+}
 }
 
 esp_err_t ai_talk_service_start(void)

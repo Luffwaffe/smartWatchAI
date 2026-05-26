@@ -42,7 +42,8 @@
 #define BLUETOOTH_MANAGER_FRAME_MAGIC_0 0xA5
 #define BLUETOOTH_MANAGER_FRAME_MAGIC_1 0x5A
 #define BLUETOOTH_MANAGER_FRAME_VERSION 0x01
-#define BLUETOOTH_MANAGER_ANCS_ATTR_TEXT_MAX_LEN 96
+#define BLUETOOTH_MANAGER_ANCS_ATTR_TEXT_MAX_LEN 256
+#define BLUETOOTH_MANAGER_ANCS_DATA_SOURCE_BUFFER_SIZE 512
 #define BLUETOOTH_MANAGER_ANCS_CONTROL_POINT_MAX_LEN 32
 #define BLUETOOTH_MANAGER_ANCS_GATT_RETRY_DELAY_US 150000
 #define BLUETOOTH_MANAGER_ANCS_GATT_MAX_RETRIES 3
@@ -128,6 +129,9 @@ static uint16_t s_ancs_data_desc_start_handle;
 static uint16_t s_ancs_data_desc_end_handle;
 static esp_timer_handle_t s_ancs_data_cccd_timer;
 static uint8_t s_ancs_data_cccd_retry_count;
+static uint8_t s_ancs_data_source_buffer[BLUETOOTH_MANAGER_ANCS_DATA_SOURCE_BUFFER_SIZE];
+static size_t s_ancs_data_source_len;
+static uint32_t s_ancs_data_source_uid;
 
 typedef enum {
     BLUETOOTH_MANAGER_ANCS_EVENT_ADDED = 0,
@@ -398,6 +402,8 @@ static void bluetooth_manager_reset_ancs_state(void)
     if (s_ancs_data_cccd_timer) {
         esp_timer_stop(s_ancs_data_cccd_timer);
     }
+    s_ancs_data_source_len = 0;
+    s_ancs_data_source_uid = 0;
     memset(&s_ancs_pending_notification, 0, sizeof(s_ancs_pending_notification));
 }
 
@@ -480,7 +486,7 @@ static void bluetooth_manager_request_ancs_attributes(uint32_t uid)
     command[pos++] = 64;
     command[pos++] = 0;
     command[pos++] = BLUETOOTH_MANAGER_ANCS_ATTR_MESSAGE;
-    command[pos++] = 96;
+    command[pos++] = 240;
     command[pos++] = 0;
     command[pos++] = BLUETOOTH_MANAGER_ANCS_ATTR_DATE;
 
@@ -523,14 +529,14 @@ static void bluetooth_manager_handle_ancs_notification(const uint8_t *data, uint
     bluetooth_manager_request_ancs_attributes(uid);
 }
 
-static void bluetooth_manager_handle_ancs_data_source(const uint8_t *data, uint16_t len)
+static bool bluetooth_manager_parse_ancs_data_source_response(const uint8_t *data, uint16_t len)
 {
     if (!data || len < 5 || data[0] != 0x00) {
         BT_ANCS_DEBUG_LOGI("Data Source ignored: data=%p len=%u command=%u",
                            (const void *)data,
                            len,
                            data ? data[0] : 0xff);
-        return;
+        return true;
     }
 
     uint32_t uid = (uint32_t)data[1] | ((uint32_t)data[2] << 8) |
@@ -554,8 +560,12 @@ static void bluetooth_manager_handle_ancs_data_source(const uint8_t *data, uint1
                            attr_id,
                            attr_len);
         if (pos + attr_len > len) {
-            ESP_LOGW(TAG, "Truncated ANCS attribute uid=%lu attr=%u len=%u", (unsigned long)uid, attr_id, attr_len);
-            attr_len = len > pos ? (uint16_t)(len - pos) : 0;
+            BT_ANCS_DEBUG_LOGI("Data Source waiting for more bytes: uid=%lu attr=%u need=%u have=%u",
+                               (unsigned long)uid,
+                               attr_id,
+                               attr_len,
+                               (unsigned)(len - pos));
+            return false;
         }
 
         switch (attr_id) {
@@ -585,6 +595,13 @@ static void bluetooth_manager_handle_ancs_data_source(const uint8_t *data, uint1
         pos += attr_len;
     }
 
+    if (pos < len) {
+        BT_ANCS_DEBUG_LOGI("Data Source waiting for attr header: uid=%lu trailing=%u",
+                           (unsigned long)uid,
+                           (unsigned)(len - pos));
+        return false;
+    }
+
     ESP_LOGI(TAG, "ANCS notification uid=%lu app=%s title=%s message=%s",
              (unsigned long)s_ancs_pending_notification.uid,
              s_ancs_pending_notification.app_id,
@@ -598,6 +615,48 @@ static void bluetooth_manager_handle_ancs_data_source(const uint8_t *data, uint1
                        s_ancs_pending_notification.message,
                        s_ancs_pending_notification.date);
     bluetooth_manager_publish_ancs_notification(&s_ancs_pending_notification);
+    return true;
+}
+
+static void bluetooth_manager_handle_ancs_data_source(const uint8_t *data, uint16_t len)
+{
+    if (!data || len == 0) {
+        return;
+    }
+
+    bool starts_response = len >= 5 && data[0] == 0x00;
+    if (starts_response) {
+        uint32_t uid = (uint32_t)data[1] | ((uint32_t)data[2] << 8) |
+                       ((uint32_t)data[3] << 16) | ((uint32_t)data[4] << 24);
+        if (s_ancs_data_source_len > 0 && uid != s_ancs_data_source_uid) {
+            ESP_LOGW(TAG, "Dropping incomplete ANCS response uid=%lu before uid=%lu",
+                     (unsigned long)s_ancs_data_source_uid,
+                     (unsigned long)uid);
+        }
+        s_ancs_data_source_len = 0;
+        s_ancs_data_source_uid = uid;
+    } else if (s_ancs_data_source_len == 0) {
+        BT_ANCS_DEBUG_LOGI("Data Source continuation ignored without active response: len=%u", len);
+        return;
+    }
+
+    if (len > sizeof(s_ancs_data_source_buffer) - s_ancs_data_source_len) {
+        ESP_LOGW(TAG, "ANCS Data Source response overflow, dropping uid=%lu len=%u incoming=%u",
+                 (unsigned long)s_ancs_data_source_uid,
+                 (unsigned)s_ancs_data_source_len,
+                 len);
+        s_ancs_data_source_len = 0;
+        s_ancs_data_source_uid = 0;
+        return;
+    }
+
+    memcpy(&s_ancs_data_source_buffer[s_ancs_data_source_len], data, len);
+    s_ancs_data_source_len += len;
+    if (bluetooth_manager_parse_ancs_data_source_response(s_ancs_data_source_buffer,
+                                                          (uint16_t)s_ancs_data_source_len)) {
+        s_ancs_data_source_len = 0;
+        s_ancs_data_source_uid = 0;
+    }
 }
 
 static void bluetooth_manager_handle_ancs_gatt_notify(uint16_t attr_handle, struct os_mbuf *om)
@@ -606,7 +665,7 @@ static void bluetooth_manager_handle_ancs_gatt_notify(uint16_t attr_handle, stru
         return;
     }
 
-    uint8_t data[128];
+    uint8_t data[256];
     uint16_t len = OS_MBUF_PKTLEN(om);
     if (len > sizeof(data)) {
         len = sizeof(data);
