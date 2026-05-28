@@ -5,6 +5,8 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include "esp_log.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -12,6 +14,8 @@
 #define DATA_CENTER_MAX_RETAINED_EVENTS 12
 #define DATA_CENTER_TASK_STACK_SIZE 4096
 #define DATA_CENTER_TASK_PRIORITY 4
+
+static const char *TAG = "data_center";
 
 static data_center_item_t s_items[DATA_CENTER_MAX_ITEMS];
 static size_t s_item_count = 0;
@@ -177,6 +181,16 @@ static void data_center_process_event(const data_center_event_t *event)
     for (size_t i = 0; i < DATA_CENTER_MAX_SUBSCRIBERS; ++i) {
         data_center_subscriber_t *subscriber = &subscribers[i];
         if (subscriber->used && subscriber->cb && data_center_filter_matches(&subscriber->filter, event)) {
+#ifdef QDEBUG
+            ESP_LOGI(TAG,
+                     "event route: source=%s target=%s topic=%s type=%u -> owner=%s filter_target=%s",
+                     event->source,
+                     event->target,
+                     event->topic,
+                     event->type,
+                     subscriber->filter.owner,
+                     subscriber->filter.target);
+#endif
             subscriber->cb(event, subscriber->user_ctx);
         }
     }

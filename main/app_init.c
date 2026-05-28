@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "app_config.h"
+#include "audio_manager.h"
 #include "bluetooth_manager.h"
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
@@ -19,6 +20,7 @@
 #include "nvs_flash.h"
 #include "qmi8658.h"
 #include "rtc_manager.h"
+#include "wifi_manager.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -174,6 +176,28 @@ static esp_err_t init_data_center(void)
     return ESP_OK;
 }
 
+static esp_err_t init_audio_manager(void)
+{
+    ESP_LOGI(TAG, "Initializing audio manager...");
+
+    ESP_RETURN_ON_ERROR(audio_manager_init(), TAG, "Failed to initialize audio manager");
+    ESP_RETURN_ON_ERROR(audio_manager_start(), TAG, "Failed to start audio manager");
+
+    ESP_LOGI(TAG, "Audio manager started");
+    return ESP_OK;
+}
+
+static esp_err_t init_wifi_manager(void)
+{
+    ESP_LOGI(TAG, "Initializing WiFi manager...");
+
+    ESP_RETURN_ON_ERROR(wifi_manager_init(), TAG, "Failed to initialize WiFi manager");
+    ESP_RETURN_ON_ERROR(wifi_manager_start(), TAG, "Failed to start WiFi manager");
+
+    ESP_LOGI(TAG, "WiFi manager started");
+    return ESP_OK;
+}
+
 static void log_optional_init_result(const char *name, esp_err_t ret)
 {
     if (ret != ESP_OK) {
@@ -215,6 +239,12 @@ esp_err_t app_system_init(app_hw_status_t *status)
 
     ret = init_data_center();
     log_optional_init_result("Data center", ret);
+
+    ret = init_audio_manager();
+    log_optional_init_result("Audio manager", ret);
+
+    ret = init_wifi_manager();
+    log_optional_init_result("WiFi manager", ret);
 
     ret = init_bluetooth_manager();
     log_optional_init_result("Bluetooth manager", ret);

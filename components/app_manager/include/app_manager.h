@@ -20,6 +20,8 @@ typedef enum {
     APP_EVT_BLUETOOTH_STATUS_CHANGED = 8,
     APP_EVT_QUICK_PANEL_MESSAGE = 9,
     APP_EVT_PHONE_MESSAGE = 10,
+    APP_EVT_SETTING_WIFI_SCAN_DONE = 11,
+    APP_EVT_SETTING_WIFI_STATUS_CHANGED = 12,
 } app_event_type_t;
 
 typedef struct {

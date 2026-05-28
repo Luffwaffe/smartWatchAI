@@ -17,7 +17,7 @@
 
 static const char *TAG = "app_manager";
 
-#ifdef DEBUG
+#ifdef QDEBUG
 #define APP_MANAGER_DEBUG_LOG(...) ESP_LOGI(TAG, __VA_ARGS__)
 #else
 #define APP_MANAGER_DEBUG_LOG(...) do { } while (0)
@@ -276,7 +276,6 @@ static void app_manager_data_center_event_cb(const data_center_event_t *event, v
     if (!s_ui_queue || !app_manager_should_show_quick_panel_event(event)) {
         return;
     }
-    ESP_LOGI(TAG, " Initialization Complete");
     app_event_t ev = {
         .type = app_manager_event_type_from_data_center(event),
     };

@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS
+        "src/audio_manager.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        bsp_extra
+        data_center
+        driver
+)

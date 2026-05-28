@@ -7,4 +7,5 @@ set(EXTRA_COMPONENT_DIRS apps/common apps/clock apps/ai_talk apps/setting apps/d
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 add_compile_options(-Wno-format)
+add_compile_definitions(QDEBUG)
 project(esp32_c6_amoled_template)
